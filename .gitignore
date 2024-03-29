@@ -1,0 +1,8 @@
+.vscode/
+__pycache__/
+data/
+wandb/
+out/
+tests/runs/
+saved/
+.ipynb_checkpoints/
