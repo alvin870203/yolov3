@@ -132,9 +132,9 @@ class ImageNetTrainDataLoader(DataLoader):
         else:
             raise ValueError(f"Invalid augmentation type: {config.aug_type}")
 
+        dataset = torchvision.datasets.ImageNet(data_dir, split='train', transform=transform)
         if nano:
             dataset = Subset(dataset, indices=range(2))
-        dataset = torchvision.datasets.ImageNet(data_dir, split='train', transform=transform)
         super().__init__(dataset, batch_size=batch_size, shuffle=shuffle,
                          num_workers=num_workers, pin_memory=pin_memory)
 
@@ -162,9 +162,9 @@ class ImageNetValDataLoader(DataLoader):
         else:
             raise ValueError(f"Invalid augmentation type: {config.aug_type}")
 
+        dataset = torchvision.datasets.ImageNet(data_dir, split='val', transform=transform)
         if nano:
             dataset = Subset(dataset, indices=range(2))
-        dataset = torchvision.datasets.ImageNet(data_dir, split='val', transform=transform)
         super().__init__(dataset, batch_size=batch_size, shuffle=shuffle,
                          num_workers=num_workers, pin_memory=pin_memory)
 
@@ -192,6 +192,7 @@ class BlankImageNetTrainDataLoader(DataLoader):
                                                                    device=inp.device).view(3, 1, 1).expand(inp.shape),
                                                       like=inp)
                           if isinstance(inp, tv_tensors.Image) else inp),
+                v2.Resize(size=(config.img_h, config.img_w), interpolation=InterpolationMode.NEAREST, antialias=True),
                 v2.ToDtype(torch.float32, scale=True),
                 v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
             ])
@@ -202,7 +203,7 @@ class BlankImageNetTrainDataLoader(DataLoader):
                          num_workers=num_workers, pin_memory=pin_memory)
 
 
-class BlankImageNetTrainDataLoader(DataLoader):
+class BlankImageNetValDataLoader(DataLoader):
     """All images are set to zeros. Used for setting input-independent baseline."""
     # Default shuffle=True since only eval partial data
     def __init__(self, config: BlankImageNetConfig, data_dir, batch_size, num_workers, shuffle=True, pin_memory=True,
@@ -217,6 +218,7 @@ class BlankImageNetTrainDataLoader(DataLoader):
                                                                    device=inp.device).view(3, 1, 1).expand(inp.shape),
                                                       like=inp)
                           if isinstance(inp, tv_tensors.Image) else inp),
+                v2.Resize(size=(config.img_h, config.img_w), interpolation=InterpolationMode.NEAREST, antialias=True),
                 v2.ToDtype(torch.float32, scale=True),
                 v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
             ])
