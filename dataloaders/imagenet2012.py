@@ -244,5 +244,5 @@ if __name__ == '__main__':
     print(f"{example_img.shape=}")
     print(f"{example_img.mean()=}, {example_img.std()=}")
     print(f"{example_img.min()=}, {example_img.max()=}")
-    plt.imshow(example_img.permute(1, 2, 0))
-    plt.show()
+    # plt.imshow(example_img.permute(1, 2, 0))
+    # plt.show()
