@@ -107,7 +107,7 @@ class ImageNetTrainDataLoader(DataLoader):
                 v2.RandomResizedCrop(size=(config.img_h, config.img_w), scale=(config.scale_min, config.scale_max),
                                      ratio=(config.ratio_min, config.ratio_max), antialias=True),
                 v2.RandomHorizontalFlip(p=config.flip_p),
-                v2.TrivialAugmentWide(fill=config.fill),
+                v2.TrivialAugmentWide(fill=config.fill, interpolation=InterpolationMode.BILINEAR),
                 v2.ToDtype(torch.float32, scale=True),
                 v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
             ])
@@ -117,14 +117,14 @@ class ImageNetTrainDataLoader(DataLoader):
                                saturation=config.saturation, hue=config.hue),
                 # perspective & affine transform on PIL image solves the issue with black borders
                 v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
-                                     interpolation=InterpolationMode.BICUBIC),
+                                     interpolation=InterpolationMode.BILINEAR),
                 v2.RandomAffine(degrees=config.degrees, translate=(config.translate, config.translate),
                                 scale=(config.scale_min, config.scale_max),
                                 shear=(-config.shear, config.shear, -config.shear, config.shear), fill=config.fill,
-                                interpolation=InterpolationMode.BICUBIC),
+                                interpolation=InterpolationMode.BILINEAR),
+                v2.ToImage(),
                 Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill, antialias=True,
-                       interpolation=InterpolationMode.BICUBIC),
-                v2.ToImage(),  # bicubic interpolation is not supported for tensors
+                       interpolation=InterpolationMode.BILINEAR),
                 v2.RandomHorizontalFlip(p=config.flip_p),
                 v2.ToDtype(torch.float32, scale=True),
                 v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
