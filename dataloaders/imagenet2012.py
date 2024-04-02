@@ -115,6 +115,8 @@ class ImageNetTrainDataLoader(DataLoader):
             transform = v2.Compose([
                 v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
                                saturation=config.saturation, hue=config.hue),
+                Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill, antialias=True,
+                       interpolation=InterpolationMode.BILINEAR),
                 # perspective & affine transform on PIL image solves the issue with black borders
                 v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
                                      interpolation=InterpolationMode.BILINEAR),
@@ -123,8 +125,6 @@ class ImageNetTrainDataLoader(DataLoader):
                                 shear=(-config.shear, config.shear, -config.shear, config.shear), fill=config.fill,
                                 interpolation=InterpolationMode.BILINEAR),
                 v2.ToImage(),
-                Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill, antialias=True,
-                       interpolation=InterpolationMode.BILINEAR),
                 v2.RandomHorizontalFlip(p=config.flip_p),
                 v2.ToDtype(torch.float32, scale=True),
                 v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
