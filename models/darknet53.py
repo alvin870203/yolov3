@@ -5,6 +5,9 @@ Ref:
 https://github.com/pjreddie/darknet/blob/master/examples/classifier.c
 https://github.com/pjreddie/darknet/blob/master/cfg/darknet53.cfg
 https://github.com/pjreddie/darknet/blob/master/cfg/darknet53_448.cfg
+2) unofficial pytorch implementation:
+https://github.com/njustczr/cspdarknet53/blob/master/darknet53/darknet53.py
+https://github.com/developer0hye/PyTorch-Darknet53/blob/master/model.py
 """
 
 import math
@@ -103,8 +106,9 @@ class Darknet53Backbone(nn.Module):
         Args:
             x (Tensor): size(N, 3, img_h, img_w)
         Returns:
-            x (Tensor): (N, 1024, img_h / 256 * 8, img_w / 256 * 8)
-            feat (Tensor): TODO
+            feat_stage3 (Tensor): (N, 256, img_h / 256 * 32, img_w / 256 * 32)
+            feat_stage4 (Tensor): (N, 512, img_h / 256 * 16, img_w / 256 * 16)
+            feat_stage5 (Tensor): (N, 1024, img_h / 256 * 8, img_w / 256 * 8)
         """
         # N x 3 x img_h x img_w
         x = self.conv0(x)
@@ -139,6 +143,7 @@ class Darknet53Backbone(nn.Module):
         x = self.stage3_block7(x)
         # N x 256 x img_h / 8 x img_w / 8
         x = self.stage3_block8(x)
+        feat_stage3 = x
         # N x 256 x img_h / 8 x img_w / 8
 
         x = self.conv4(x)
@@ -158,6 +163,7 @@ class Darknet53Backbone(nn.Module):
         x = self.stage4_block7(x)
         # N x 512 x img_h / 16 x img_w / 16
         x = self.stage4_block8(x)
+        feat_stage4 = x
         # N x 512 x img_h / 16 x img_w / 16
 
         x = self.conv5(x)
@@ -169,9 +175,10 @@ class Darknet53Backbone(nn.Module):
         x = self.stage5_block3(x)
         # N x 1024 x img_h / 32 x img_w / 32
         x = self.stage5_block4(x)
+        feat_stage5 = x
         # N x 1024 x img_h / 32 x img_w / 32
 
-        return x
+        return feat_stage3, feat_stage4, feat_stage5
 
 
 class Darknet53(nn.Module):
@@ -244,9 +251,9 @@ class Darknet53(nn.Module):
 
         # Forward the Darknet53 model itself
         # N x 3 x img_h x img_w
-        x = self.backbone(imgs)  # TODO: feat
-        # N x 1024 x img_h / 32 x img_w / 32
-        logits = self.head(x)
+        feat_stage3, feat_stage4, feat_stage5 = self.backbone(imgs)
+        # N x 256 x img_h / 8 x img_w / 8; N x 512 x img_h / 16 x img_w / 16; N x 1024 x img_h / 32 x img_w / 32
+        logits = self.head(feat_stage5)
         # N x n_class
 
         if targets is not None:
