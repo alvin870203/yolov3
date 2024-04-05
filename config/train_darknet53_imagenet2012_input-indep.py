@@ -41,7 +41,7 @@ model_name = 'darknet53'
 # imagenet2012 train set has 1,281,167 imgs, so 1 epoch ~= 5,005 iters
 gradient_accumulation_steps = 1
 batch_size = 256  # filled up the gpu memory on my machine
-max_iters = 500500  # 100 epochs, finish in TODO hr on my machine
+max_iters = 500500  # 100 epochs, finish in 2 hr on my machine
 
 # Optimizer related
 optimizer_type = 'sgd'
