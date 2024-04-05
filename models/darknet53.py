@@ -101,7 +101,7 @@ class Darknet53Backbone(nn.Module):
         self.stage5_block3 = Darknet53Block(1024, 1024)
         self.stage5_block4 = Darknet53Block(1024, 1024)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tuple[Tensor, ...]:
         """
         Args:
             x (Tensor): size(N, 3, img_h, img_w)
