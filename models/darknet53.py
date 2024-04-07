@@ -106,9 +106,9 @@ class Darknet53Backbone(nn.Module):
         Args:
             x (Tensor): size(N, 3, img_h, img_w)
         Returns:
-            feat_stage3 (Tensor): (N, 256, img_h / 256 * 32, img_w / 256 * 32)
-            feat_stage4 (Tensor): (N, 512, img_h / 256 * 16, img_w / 256 * 16)
-            feat_stage5 (Tensor): (N, 1024, img_h / 256 * 8, img_w / 256 * 8)
+            feat_stage3 (Tensor): (N, 256, img_h / 8, img_w / 8)
+            feat_stage4 (Tensor): (N, 512, img_h / 16, img_w / 16)
+            feat_stage5 (Tensor): (N, 1024, img_h / 32, img_w / 32)
         """
         # N x 3 x img_h x img_w
         x = self.conv0(x)
