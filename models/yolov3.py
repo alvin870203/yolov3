@@ -25,7 +25,7 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 from torch.nn import functional as F
-from torchvision.ops import box_iou, box_convert, clip_boxes_to_image, nms, batched_nms
+from torchvision.ops import box_iou, box_convert, clip_boxes_to_image, nms, batched_nms, complete_box_iou_loss
 import thop  # for FLOPs computation
 from models.darknet53 import Darknet53Config, Darknet53Conv2d, Darknet53Backbone
 
@@ -55,6 +55,15 @@ class Yolov3Config:
         ((30, 61), (62, 45), (59, 119)),  # scale4 (from stage4 & upsampled stage5)
         ((116, 90), (156, 198), (373, 326)),  # scale5 (from stage5)
     )  # w,h in pixels of a 416x416 image. IMPORTANT: from scale3 to scale5, order-aware!
+    match_thresh: float = 4.0  # iou or wh ratio threshold to match a target to an anchor
+    rescore: float = 1.0  # 0.0~1.0, rescore ratio; if 0.0, use 1 as objectness target; if 1.0, use iou as objectness target
+    smooth: float = 0.0  # 0.0~1.0, smooth ratio for class BCE loss; 0.0 for no smoothing; 0.1 is a common choice
+    pos_weight_class: float = 1.0  # weight for class BCE loss of positive examples, as if the positive examples are duplicated
+    pos_weight_obj: float = 1.0  # weight for obj BCE loss of positive examples, as if the positive examples are duplicated
+    balance: Tuple[float, float, float] = (4.0, 1.0, 0.4)  # balance weights for scale3~5 loss_obj. Maybe it's because the scale3 has less portion of objects and larger portion of no-obj cells, so if the no-obj loss is near zero, then obj loss of scale3 is less due to mean reduction, which is why balance_scale3 is larger, to ensures that the predictions at different scales contribute appropriately to the total loss.
+    lambda_box: float = 0.05  # weight for box loss
+    lambda_obj: float = 1.0  # weight for obj loss
+    lambda_class: float = 0.5  # weight for class loss
 
 
 class Yolov3Head(nn.Module):
@@ -205,7 +214,7 @@ class Yolov3(nn.Module):
         # Build strides, anchors
         forward = lambda imgs: self.forward(imgs)
         self.stride_scale3, self.stride_scale4, self.stride_scale5 = [
-            config.img_w / logit.shape[-2] for logit in forward(torch.zeros(1, 3, config.img_h, config.img_w))
+            config.img_w / logit.shape[-2] for logit in forward(torch.zeros(1, 3, config.img_h, config.img_w))[:3]
         ]  # 8., 16., 32. by default
         # Register anchors as buffer to make they switch device with model
         self.register_buffer("anchors_scale3",  # size(n_anchor_per_scale, 2), w,h in unit of cell
@@ -218,6 +227,8 @@ class Yolov3(nn.Module):
         self.grid_scale3, self.anchor_grid_scale3 = torch.empty(0), torch.empty(0)
         self.grid_scale4, self.anchor_grid_scale4 = torch.empty(0), torch.empty(0)
         self.grid_scale5, self.anchor_grid_scale5 = torch.empty(0), torch.empty(0)
+        # Balance for obj loss of different scales
+        self.balance_scale3, self.balance_scale4, self.balance_scale5 = config.balance
 
         # Init all weights & biases
         self.apply(self._init_weights)
@@ -283,12 +294,15 @@ class Yolov3(nn.Module):
         print(f"YOLOv3 summary: {len(list(self.modules()))} layers, {n_param} parameters, {n_grad} gradients{fs}")
 
 
-    def forward(self, imgs: Tensor, targets: Optional[Tensor] = None) -> Tuple[Tensor, ...]:
+    def forward(self, imgs: Tensor, target: Optional[Tensor] = None) -> Tuple[Tensor, ...]:
         """
         Forward pass of single-scale training.
         Args:
             imgs (Tensor): size(N, 3, img_h, img_w)
-            targets (Tensor): TODO
+            target (Tensor): size(n_batch_obj, 6), n_batch_obj is the total number of object boxes in the batch (N imgs)
+                target[i, 0] is the idx of the image in the batch, 0~batch_size-1
+                target[i, 1] is the class index for a object box, 0.0~float(n_class-1), no background class
+                target[i, 2:6] is the box coordinates for a object box, normalized by img w,h, CXCYWH format
         Returns:
             logit_scale3 (Tensor): size(N, n_anchor_per_scale, img_h / 8, img_w / 8, 5 + n_class)
                 logit[i, j, k, l, 0:4] is the box coordinates for the j-th box in the k,l-th cell,
@@ -298,8 +312,10 @@ class Yolov3(nn.Module):
                 logit[i, j, k, l, 5:5+n_class] is the class logit (before softmax) for the j-th box in the k,l-th cell
             logit_scale4 (Tensor): size(N, n_anchor_per_scale, img_h / 16, img_w / 16, 5 + n_class)
             logit_scale5 (Tensor): size(N, n_anchor_per_scale, img_h / 32, img_w / 32, 5 + n_class)
-            loss (Tensor): size(,), weighted sum of the following losses
-            TODO: components of the loss
+            loss (Tensor): size(,), combination of the following losses
+            loss_obj (Tensor): size(,), TODO
+            loss_class (Tensor): size(,), TODO
+            loss_box (Tensor): size(,), TODO
         """
         device = imgs.device
 
@@ -316,35 +332,202 @@ class Yolov3(nn.Module):
         # logit_scale4: N x n_anchor_per_scale x img_h / 16 x img_w / 16 x (5 + n_class)
         # logit_scale5: N x n_anchor_per_scale x img_h / 32 x img_w / 32 x (5 + n_class)
 
-        # TODO: compute loss
-        return logit_scale3, logit_scale4, logit_scale5
+        if target is not None:
+            # If we are given some desired target also calculate the loss
+            loss, loss_obj, loss_class, loss_box = self._compute_loss(logit_scale3, logit_scale4, logit_scale5, target)
+        else:
+            loss, loss_obj, loss_class, loss_box = None, None, None, None
+
+        return logit_scale3, logit_scale4, logit_scale5, loss, loss_obj, loss_class, loss_box
+
+
+    def _compute_loss(self, logit_scale3: Tensor, logit_scale4: Tensor, logit_scale5: Tensor, target: Tensor) -> Tuple[Tensor, ...]:
+        """
+        Compute the loss and its components.
+        Args:
+            logit_scale3 (Tensor): size(N, n_anchor_per_scale, img_h / 8, img_w / 8, 5 + n_class)
+            logit_scale4 (Tensor): size(N, n_anchor_per_scale, img_h / 16, img_w / 16, 5 + n_class)
+            logit_scale5 (Tensor): size(N, n_anchor_per_scale, img_h / 32, img_w / 32, 5 + n_class)
+            target (Tensor): size(n_batch_obj, 6)
+        Returns:
+            loss (Tensor): size(,)
+            loss_obj (Tensor): size(,)
+            loss_class (Tensor): size(,)
+            loss_box (Tensor): size(,)
+        """
+        batch_size, dtype, device = logit_scale3.shape[0], target.dtype, target.device
+        loss = torch.tensor(0.0, dtype=dtype, device=device)
+        loss_obj = torch.tensor(0.0, dtype=dtype, device=device)
+        loss_class = torch.tensor(0.0, dtype=dtype, device=device)
+        loss_box = torch.tensor(0.0, dtype=dtype, device=device)
+
+        # Iterate over scales
+        for logit, anchors, balance in ((logit_scale3, self.anchors_scale3, self.balance_scale3),
+                                        (logit_scale4, self.anchors_scale4, self.balance_scale4),
+                                        (logit_scale5, self.anchors_scale5, self.balance_scale5)):
+            target_class, target_box, responsible_idx, responsible_anchor = self._build_target(logit, target, anchors)  # size(n_responsible,)
+            idx_img, idx_anchor, cell_y, cell_x = responsible_idx.T  # size(n_responsible,)
+            n_responsible = idx_img.shape[0]
+            # Init objectness target to zeros (not responsible)
+            target_obj = torch.zeros_like(logit[:, :, :, :, 4])  # size(N, n_anchor_per_scale, n_cell_h, n_cell_w)
+
+            if n_responsible > 0:
+                # Responsible coord & class logit
+                responsible_logit = logit[idx_img, idx_anchor, cell_y, cell_x]  # size(n_responsible, 5 + n_class)
+                logit_xy, logit_wh, _, logit_class = responsible_logit.split(
+                    [2, 2, 1, self.config.n_class], dim=-1
+                )  # size(n_responsible, 2), size(n_responsible, 2), size(n_responsible, 1), size(n_responsible, n_class)
+
+                # Regression - box CIoU loss
+                # Restore logits to predictions, in unit of cell w,h, relative to top-left of responsible cell
+                pred_xy = torch.sigmoid(logit_xy) * 2 - 0.5  # size(n_responsible, 2)
+                pred_wh = (torch.sigmoid(logit_wh) * 2) ** 2 * responsible_anchor  # size(n_responsible, 2)
+                pred_box = torch.cat((pred_xy, pred_wh), dim=-1)  # size(n_responsible, 4)
+                # Compute iou between predictions and targets
+                iou_loss = complete_box_iou_loss(  # iou_loss = 1 - iou  # FUTURE: try other types of iou loss
+                    box_convert(pred_box, 'cxcywh', 'xywh'),  # size(n_responsible, 4)
+                    box_convert(target_box, 'cxcywh', 'xywh'),  # size(n_responsible, 4)
+                    reduction='none'
+                )  # size(n_responsible,)
+                loss_box += iou_loss.mean()
+
+                # Objectness - assign objectness target to responsible pred
+                iou = 1.0 - iou_loss.detach().clamp(min=0).to(dtype)  # size(n_responsible,), objectness target for responsible pred
+                if self.config.rescore < 1.0:
+                    iou = (1.0 - self.config.rescore) + iou * self.config.rescore
+                target_obj[idx_img, idx_anchor, cell_y, cell_x] = iou
+
+                # Classification - class smooth-BCE-with-logits loss  # FUTURE: focal loss
+                target_class = F.one_hot(target_class, self.config.n_class).to(dtype)
+                # Optional label smoothing for BCE: positive class: 1 - 0.5 * smooth, negative class: 0.5 * smooth
+                target_class = target_class * (1.0 - self.config.smooth) + 0.5 * self.config.smooth
+                loss_class += F.binary_cross_entropy_with_logits(
+                    logit_class, target_class,
+                    reduction='mean', pos_weight=torch.tensor(self.config.pos_weight_class, device=device)
+                )
+
+            # Objectness - obj BCE loss  # FUTURE: autobalance, but it's disabled in YOLOv5, so maybe no good
+            loss_obj += balance * F.binary_cross_entropy_with_logits(
+                logit[:, :, :, :, 4], target_obj,
+                reduction='mean', pos_weight=torch.tensor(self.config.pos_weight_obj, device=device)
+            )
+
+        loss_box *= self.config.lambda_box
+        loss_obj *= self.config.lambda_obj
+        loss_class *= self.config.lambda_class
+        loss = batch_size * (loss_box + loss_obj + loss_class)
+
+        return loss, loss_obj.detach(), loss_class.detach(), loss_box.detach()
+
+
+    def _build_target(self, logit: Tensor, target: Tensor, anchors: Tensor) -> Tuple[Tensor, ...]:
+        """
+        Build target for the loss computation of a scale.
+        Args:
+            logit (Tensor): size(N, n_anchor_per_scale, img_h / stride, img_w / stride, 5 + n_class)
+            target (Tensor): size(n_batch_obj, 6)
+            anchors (Tensor): size(n_anchor_per_scale, 2), w,h in unit of cell
+        Returns:
+            target_class (Tensor): size(n_responsible,)
+            target_box (Tensor): size(n_responsible, 4), x,y,w,h in unit of cell, relative to top-left of responsible cell
+            responsible_idx (Tensor): size(n_responsible, 4),torch.int64
+                responsible_idx[i, 0] is the idx_img in this batch
+                responsible_idx[i, 1] idx of responsible anchor of i'th responsible cell in this scale
+                responsible_idx[i, 2] idx_y of i'th responsible cell
+                responsible_idx[i, 3] idx_x of i'th responsible cell
+            responsible_anchor (Tensor): size(n_responsible, 2), anchors of responsible logits, w,h in unit of cell
+        """
+        dtype, device = target.dtype, target.device
+        n_batch_obj = target.shape[0]
+        idx_anchor_per_scale = torch.arange(
+            self.config.n_anchor_per_scale, dtype=dtype, device=device
+        ).repeat_interleave(n_batch_obj)  # size(n_anchor_per_scale * n_batch_obj,)
+        target = torch.cat((  # append anchor idx
+            target.repeat(self.config.n_anchor_per_scale, 1, 1),  # size(n_anchor_per_scale, n_batch_obj, 6)
+            idx_anchor_per_scale.view(self.config.n_anchor_per_scale, n_batch_obj, 1)  # size(n_anchor_per_scale, n_batch_obj, 1)
+        ), dim=-1)  # size(n_anchor_per_scale, n_batch_obj, 7)
+        n_cell_h, n_cell_w = logit.shape[2:4]
+        # Normalize box coordinates into unit of cell
+        target[:, :, 2:6] = target[:, :, 2:6] * torch.tensor([n_cell_w, n_cell_h, n_cell_w, n_cell_h], device=device)
+        # Match target to anchors
+        if n_batch_obj > 0:
+            # Match  # FUTURE: how about match by iou
+            wh_ratio = target[:, :, 4:6] / anchors.view(self.config.n_anchor_per_scale, 1, 2)  # size(n_anchor_per_scale, n_batch_obj, 2)
+            match_score = torch.max(torch.max(wh_ratio, 1.0 / wh_ratio), dim=-1).values  # size(n_anchor_per_scale, n_batch_obj)
+            mask_matched = match_score < self.config.match_thresh
+            target = target[mask_matched]  # size(n_matched, 7)
+            n_matched = target.shape[0]
+            # If box is near a border of two cells (exclude img edge),
+            # make anchors in nearby cells also responsible.  # FUTURE: won't this make NMS more burdensome?
+            target_xy = target[:, 2:4]  # size(n_matched, 2)
+            target_xy_inv = torch.tensor([n_cell_w, n_cell_h], device=device) - target_xy  # size(n_matched, 2)
+            near_border_right, near_border_bottom = ((target_xy % 1 < 0.5) & (target_xy > 1)).T  # size(n_matched,), bool
+            near_border_left, near_border_top = ((target_xy_inv % 1 < 0.5) & (target_xy_inv > 1)).T  # size(n_matched,), bool
+            mask_responsible = torch.stack((
+                torch.ones_like(near_border_right),  # original x,y
+                near_border_right,
+                near_border_bottom,
+                near_border_left,
+                near_border_top,
+            ))  # size(5, n_matched), bool
+            target = target.repeat(5, 1, 1)  # size(5, n_matched, 7)
+            # Dilate the responsible cells for near-cell-border logits
+            target = target[mask_responsible]  # size(n_responsible, 7)
+            offset = torch.tensor([  # dilation direction
+                [[0.0, 0.0]],  # original x,y, original cell is always responsible
+                [[-0.5, 0.0]],  # near the right of a border, make the left cell also responsible
+                [[0.0, -0.5]],  # near the bottom of a border, make the top cell also responsible
+                [[0.5, 0.0]],  # near the left of a border, make the right cell also responsible
+                [[0.0, 0.5]],  # near the top of a border, make the bottom cell also responsible
+            ], dtype=dtype, device=device)  # size(5, 1, 2)
+            offset = offset.expand(5, n_matched, 2)  # size(5, n_matched, 2)
+            offset = offset[mask_responsible]  # size(n_responsible, 2)
+        else:
+            target = target[0]  # size(0, 7)
+            offset = 0
+        # Convert to formats for loss computation
+        target_class = target[:, 1].to(torch.int64)  # size(n_responsible,)
+        target_xy = target[:, 2:4]  # size(n_responsible, 2)
+        target_wh = target[:, 4:6]  # size(n_responsible, 2)
+        cell_xy = (target_xy + offset).to(torch.int64)  # size(n_responsible, 2), cell idx of responsible cells
+        cell_x, cell_y = cell_xy.T  # size(n_responsible,)
+        cell_x = cell_x.clamp(0, n_cell_w - 1)  # size(n_responsible,)
+        cell_y = cell_y.clamp(0, n_cell_h - 1)  # size(n_responsible,)
+        target_box = torch.cat((
+            target_xy - cell_xy,  # size(n_responsible, 2), x,y relative to top-left of responsible cell, in unit of cell w,h
+            target_wh,  # size(n_responsible, 2)
+        ), dim=-1)  # size(n_responsible, 4)
+        idx_img = target[:, 0].to(torch.int64)  # size(n_responsible,)
+        idx_anchor = target[:, 6].to(torch.int64)  # size(n_responsible,)
+        responsible_idx = torch.stack((idx_img, idx_anchor, cell_y, cell_x), dim=-1)  # size(n_responsible, 4)
+        responsible_anchor = anchors[idx_anchor]  # size(n_responsible, 2), w,h in unit of cell
+
+        return target_class, target_box, responsible_idx, responsible_anchor
 
 
     @torch.inference_mode()
-    def generate(self, imgs: Tensor, targets: Optional[Tensor] = None) -> Tuple[Tensor, ...]:
+    def generate(self, imgs: Tensor, target: Optional[Tensor] = None) -> Tuple[Tensor, ...]:
         """
         Forward pass of single-scale inference.
+        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         Args:
             imgs (Tensor): size(N, 3, img_h, img_w)
-            targets (Tensor): TODO
+            target (Tensor): size(n_batch_obj, 6)
         Returns:
-            result (Tensor): (N, n_anchor_per_scale * img_h / 8 * img_w / 8
+            pred (Tensor): (N, n_anchor_per_scale * img_h / 8 * img_w / 8
                                  + n_anchor_per_scale * img_h / 16 * img_w / 16
                                  + n_anchor_per_scale * img_h / 32 * img_w / 32, 5 + n_class)
                              restored x,y,w,h,conf,prob_class from logits (coordinates are in pixels)
             logit_scale3 (Tensor): size(N, n_anchor_per_scale, img_h / 8, img_w / 8, 5 + n_class)
-                logit[i, j, k, l, 0:4] is the box coordinates for the j-th box in the k,l-th cell,
-                                        i.e., t_x, t_y, t_w, t_h in the paper
-                logit[i, j, k, l, 4] is the objectness confidence score for the j-th box in the k,l-th cell,
-                                      i.e., t_o in the paper
-                logit[i, j, k, l, 5:5+n_class] is the class logit (before softmax) for the j-th box in the k,l-th cell
             logit_scale4 (Tensor): size(N, n_anchor_per_scale, img_h / 16, img_w / 16, 5 + n_class)
             logit_scale5 (Tensor): size(N, n_anchor_per_scale, img_h / 32, img_w / 32, 5 + n_class)
-            loss (Tensor): size(,), weighted sum of the following losses
-            TODO: components of the loss
+            loss (Tensor): size(,)
+            loss_obj (Tensor): size(,)
+            loss_class (Tensor): size(,)
+            loss_box (Tensor): size(,)
         """
-        logit_scale3, logit_scale4, logit_scale5 = self.forward(imgs, targets)  # TODO: get loss
-        result = []  # inference output
+        logit_scale3, logit_scale4, logit_scale5, loss, loss_obj, loss_class, loss_box = self.forward(imgs, target)
+        pred = []  # inference output
 
         # For scale3
         batch_size, _, n_cell_h_scale3, n_cell_w_scale3, _ = logit_scale3.shape
@@ -355,10 +538,10 @@ class Yolov3(nn.Module):
         xy_scale3, wh_scale3, conf_scale3, prob_class_scale3 = torch.split(
             torch.sigmoid(logit_scale3), [2, 2, 1, self.config.n_class], dim=-1
         )
-        xy_scale3 = (xy_scale3 * 2 + self.grid_scale3) * self.stride_scale3  # xy
-        wh_scale3 = (wh_scale3 * 2) ** 2 * self.anchor_grid_scale3  # wh
-        result_scale3 = torch.cat([xy_scale3, wh_scale3, conf_scale3, prob_class_scale3], dim=-1)
-        result.append(result_scale3.view(
+        xy_scale3 = (xy_scale3 * 2 + self.grid_scale3) * self.stride_scale3  # x,y
+        wh_scale3 = (wh_scale3 * 2) ** 2 * self.anchor_grid_scale3  # w,h
+        pred_scale3 = torch.cat([xy_scale3, wh_scale3, conf_scale3, prob_class_scale3], dim=-1)
+        pred.append(pred_scale3.view(
             batch_size, self.config.n_anchor_per_scale * n_cell_h_scale3 * n_cell_w_scale3, 5 + self.config.n_class
         ))
 
@@ -371,10 +554,10 @@ class Yolov3(nn.Module):
         xy_scale4, wh_scale4, conf_scale4, prob_class_scale4 = torch.split(
             torch.sigmoid(logit_scale4), [2, 2, 1, self.config.n_class], dim=-1
         )
-        xy_scale4 = (xy_scale4 * 2 + self.grid_scale4) * self.stride_scale4  # xy
-        wh_scale4 = (wh_scale4 * 2) ** 2 * self.anchor_grid_scale4  # wh
-        result_scale4 = torch.cat([xy_scale4, wh_scale4, conf_scale4, prob_class_scale4], dim=-1)
-        result.append(result_scale4.view(
+        xy_scale4 = (xy_scale4 * 2 + self.grid_scale4) * self.stride_scale4  # x,y
+        wh_scale4 = (wh_scale4 * 2) ** 2 * self.anchor_grid_scale4  # w,h
+        pred_scale4 = torch.cat([xy_scale4, wh_scale4, conf_scale4, prob_class_scale4], dim=-1)
+        pred.append(pred_scale4.view(
             batch_size, self.config.n_anchor_per_scale * n_cell_h_scale4 * n_cell_w_scale4, 5 + self.config.n_class
         ))
 
@@ -389,12 +572,12 @@ class Yolov3(nn.Module):
         )
         xy_scale5 = (xy_scale5 * 2 + self.grid_scale5) * self.stride_scale5  # xy = (2.0 * sigmoid(t_xy) - 0.5 + c_xy) * stride
         wh_scale5 = (wh_scale5 * 2) ** 2 * self.anchor_grid_scale5  # wh = (2.0 * sigmoid(t_wh)) ** 2 * p_wh
-        result_scale5 = torch.cat([xy_scale5, wh_scale5, conf_scale5, prob_class_scale5], dim=-1)
-        result.append(result_scale5.view(
+        pred_scale5 = torch.cat([xy_scale5, wh_scale5, conf_scale5, prob_class_scale5], dim=-1)
+        pred.append(pred_scale5.view(
             batch_size, self.config.n_anchor_per_scale * n_cell_h_scale5 * n_cell_w_scale5, 5 + self.config.n_class
         ))
 
-        return torch.cat(result, dim=1), logit_scale3, logit_scale4, logit_scale5  # TODO: return loss
+        return torch.cat(pred, dim=1), logit_scale3, logit_scale4, logit_scale5, loss, loss_obj, loss_class, loss_box
 
 
     def _make_grid(self, n_cell_h: int, n_cell_w: int, anchors_per_scale: Tensor, stride: float) -> Tuple[Tensor, ...]:
@@ -422,6 +605,7 @@ class Yolov3(nn.Module):
 
 
 if __name__ == '__main__':
+
     # Test the model by `python -m models.yolov3` from the workspace directory
     # TODO: change following back to for Yolov3 with loss computation
     config = Yolov3Config()
@@ -431,9 +615,14 @@ if __name__ == '__main__':
     print(f"num params: {model.get_num_params():,}")  # 61,949,149
 
     imgs = torch.randn((2, 3, config.img_h, config.img_w))
+    target = torch.tensor([[0, 1, 0.51, 0.5, 0.5, 0.5], [0, 1, 0.51, 0.5, 0.5, 0.5]], dtype=torch.float32)
 
-    logit_scale3, logit_scale4, logit_scale5 = model(imgs)
-    print(f"\n{logit_scale3.shape=}\n{logit_scale4.shape=}\n{logit_scale5.shape=}\n")
+    logit_scale3, logit_scale4, logit_scale5, loss, _, _, _ = model(imgs, target)
+    print(f"\nlogits shape:\n{logit_scale3.shape=}\n{logit_scale4.shape=}\n{logit_scale5.shape=}\n")
+    if loss is not None:
+        print(f"loss shape: {loss.shape} (value={loss})\n")
 
-    result, logit_scale3, logit_scale4, logit_scale5 = model.generate(imgs)
-    print(f"{result.shape=}\n{logit_scale3.shape=}\n{logit_scale4.shape=}\n{logit_scale5.shape=}\n")
+    pred, logit_scale3, logit_scale4, logit_scale5, loss, _, _, _ = model.generate(imgs, target)
+    print(f"\nlogits shape:\n{pred.shape=}\n{logit_scale3.shape=}\n{logit_scale4.shape=}\n{logit_scale5.shape=}\n")
+    if loss is not None:
+        print(f"loss shape: {loss.shape} (value={loss})\n")
