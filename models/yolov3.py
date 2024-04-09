@@ -270,6 +270,11 @@ class Yolov3(nn.Module):
         return n_params
 
 
+    @classmethod
+    def from_pretrained(cls, model_type, override_args=None):
+        raise NotImplementedError("FUTURE: init from pretrained model")
+
+
     def estimate_mfu(self):
         """
         Estimate model flops utilization (MFU).
@@ -313,9 +318,9 @@ class Yolov3(nn.Module):
             logit_scale4 (Tensor): size(N, n_anchor_per_scale, img_h / 16, img_w / 16, 5 + n_class)
             logit_scale5 (Tensor): size(N, n_anchor_per_scale, img_h / 32, img_w / 32, 5 + n_class)
             loss (Tensor): size(,), combination of the following losses
-            loss_obj (Tensor): size(,), TODO
-            loss_class (Tensor): size(,), TODO
-            loss_box (Tensor): size(,), TODO
+            loss_obj (Tensor): size(,), BCE loss for objectness
+            loss_class (Tensor): size(,), (smooth-)BCE or focal loss for class
+            loss_box (Tensor): size(,), CIoU loss for box
         """
         device = imgs.device
 
@@ -503,6 +508,53 @@ class Yolov3(nn.Module):
         responsible_anchor = anchors[idx_anchor]  # size(n_responsible, 2), w,h in unit of cell
 
         return target_class, target_box, responsible_idx, responsible_anchor
+
+
+    def configure_optimizers(self, optimizer_type, learning_rate, betas, weight_decay, device_type, use_fused):
+        # Start with all of the candidate parameters
+        param_dict = {pn: p for pn, p in self.named_parameters()}
+        # Filter out those that do not require grad
+        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+        print(param_dict.keys())
+
+        # Create optim groups. any parameters that is 2D will be weight decayed, otherwise no.
+        # i.e. all weight tensors in matmuls decay, all biases and norms don't.
+        # FUTURE: divide nodecay_params into two groups: bias & norm weight, so that bias lr can falls from warmup_bias_lr to lr during warmup
+        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+        optim_groups = [
+            {'params': decay_params, 'weight_decay': weight_decay},
+            {'params': nodecay_params, 'weight_decay': 0.0}
+        ]
+        num_decay_params = sum(p.numel() for p in decay_params)
+        num_nodecay_params = sum(p.numel() for p in nodecay_params)
+        print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+        print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+
+        if optimizer_type == 'adamw':
+            # Create AdamW optimizer and use the fused version if it is available
+            if use_fused:
+                fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+                use_fused = fused_available and device_type == 'cuda'
+            extra_args = dict(fused=True) if use_fused else dict()
+            optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+            print(f"using fused AdamW: {use_fused}")
+        elif optimizer_type == 'adam':
+            # Create Adam optimizer and use the fused version if it is available
+            if use_fused:
+                fused_available = 'fused' in inspect.signature(torch.optim.Adam).parameters
+                use_fused = fused_available and device_type == 'cuda'
+            extra_args = dict(fused=True) if use_fused else dict()
+            optimizer = torch.optim.Adam(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+            print(f"using fused Adam: {use_fused}")
+        elif optimizer_type == 'sgd':
+            # Create SGD optimizer
+            optimizer = torch.optim.SGD(optim_groups, lr=learning_rate, momentum=betas[0])
+            print(f"using SGD")
+        else:
+            raise ValueError(f"unrecognized optimizer_type: {optimizer_type}")
+
+        return optimizer
 
 
     @torch.inference_mode()
