@@ -392,8 +392,8 @@ class Yolov3(nn.Module):
                 pred_box = torch.cat((pred_xy, pred_wh), dim=-1)  # size(n_responsible, 4)
                 # Compute iou between predictions and targets
                 iou_loss = complete_box_iou_loss(  # iou_loss = 1 - iou  # FUTURE: try other types of iou loss
-                    box_convert(pred_box, in_fmt='cxcywh', out_fmt='xywh'),  # size(n_responsible, 4)
-                    box_convert(target_box, in_fmt='cxcywh', out_fmt='xywh'),  # size(n_responsible, 4)
+                    box_convert(pred_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
+                    box_convert(target_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
                     reduction='none'
                 )  # size(n_responsible,)
                 loss_box += iou_loss.mean()
