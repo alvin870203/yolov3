@@ -97,7 +97,7 @@ class DetEvaluator():
                 for idx_thresh in range(self.n_iou):  # every iou threshold
                     # Append sentinel values to beginning and end
                     mrec = np.concatenate(([0.0], recall[:, idx_thresh], [1.0]))
-                    mpre = np.concatenate(([1.0], precision[:, idx_thresh], [0.0]))
+                    mpre = np.concatenate(([1.0], precision[:, idx_thresh], [0.0]))  # WARNING: 0.0 at the end makes 100% AUC impossible
                     # Compute the precision envelope
                     mpre = np.flip(np.maximum.accumulate(np.flip(mpre)))
                     # Integrate area under curve

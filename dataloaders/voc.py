@@ -131,7 +131,7 @@ def voc_collate_fn(batch):
 
 class VocTrainDataLoader(DataLoader):
     def __init__(self, config: VocConfig, data_dir, batch_size, num_workers, collate_fn, shuffle=True, pin_memory=True,
-                 nano=False):  # if True: use only the first four images as the entire dataset
+                 nano=False):  # if True: use only the first five images as the entire dataset
         self.config = config
         transforms = v2.Compose([
             v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
@@ -163,7 +163,7 @@ class VocTrainDataLoader(DataLoader):
         dataset_2012_trainval_v2 = wrap_dataset_for_transforms_v2(dataset_2012_trainval, target_keys=['boxes', 'labels'])
         dataset = ConcatDataset([dataset_2007_trainval_v2, dataset_2012_trainval_v2])
         if nano:
-            dataset = Subset(dataset, indices=range(4))
+            dataset = Subset(dataset, indices=range(5))
         super().__init__(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=collate_fn,
                          num_workers=num_workers, pin_memory=pin_memory)
 
@@ -171,7 +171,7 @@ class VocTrainDataLoader(DataLoader):
 class VocValDataLoader(DataLoader):
     # Default shuffle=True since only eval partial data
     def __init__(self, config: VocConfig, data_dir, batch_size, num_workers, collate_fn, shuffle=True, pin_memory=True,
-                 nano=False):  # if True: use only the first four images as the entire dataset
+                 nano=False):  # if True: use only the first five images as the entire dataset
         self.config = config
         transforms = v2.Compose([
             Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill, antialias=True),
@@ -186,7 +186,7 @@ class VocValDataLoader(DataLoader):
                                                               download=False, transforms=transforms)
         dataset = wrap_dataset_for_transforms_v2(dataset_2007_test, target_keys=['boxes', 'labels'])
         if nano:
-            dataset = Subset(dataset, indices=range(4))
+            dataset = Subset(dataset, indices=range(5))
         super().__init__(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=collate_fn,
                          num_workers=num_workers, pin_memory=pin_memory)
 
@@ -204,7 +204,7 @@ class BlankVocConfig:
 class BlankVocTrainDataLoader(DataLoader):
     """All images are set to zeros. Used for setting input-independent baseline."""
     def __init__(self, config: BlankVocConfig, data_dir, batch_size, num_workers, collate_fn, shuffle=True, pin_memory=True,
-                 nano=False):  # if True: use only the first four images as the entire dataset
+                 nano=False):  # if True: use only the first five images as the entire dataset
         self.config = config
         self.fill = {tv_tensors.Image: config.fill, "others": 0}
         transforms = v2.Compose([
@@ -227,7 +227,7 @@ class BlankVocTrainDataLoader(DataLoader):
         dataset_2012_trainval_v2 = wrap_dataset_for_transforms_v2(dataset_2012_trainval, target_keys=['boxes', 'labels'])
         dataset = ConcatDataset([dataset_2007_trainval_v2, dataset_2012_trainval_v2])
         if nano:
-            dataset = Subset(dataset, indices=range(4))
+            dataset = Subset(dataset, indices=range(5))
         super().__init__(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=collate_fn,
                          num_workers=num_workers, pin_memory=pin_memory)
 
@@ -236,7 +236,7 @@ class BlankVocValDataLoader(DataLoader):
     """All images are set to zeros. Used for setting input-independent baseline."""
     # Default shuffle=True since only eval partial data
     def __init__(self, config: BlankVocConfig, data_dir, batch_size, num_workers, collate_fn, shuffle=True, pin_memory=True,
-                 nano=False):  # if True: use only the first four images as the entire dataset
+                 nano=False):  # if True: use only the first five images as the entire dataset
         self.config = config
         self.fill = {tv_tensors.Image: config.fill, "others": 0}
         transforms = v2.Compose([
@@ -255,7 +255,7 @@ class BlankVocValDataLoader(DataLoader):
                                                               download=False, transforms=transforms)
         dataset = wrap_dataset_for_transforms_v2(dataset_2007_test, target_keys=['boxes', 'labels'])
         if nano:
-            dataset = Subset(dataset, indices=range(4))
+            dataset = Subset(dataset, indices=range(5))
         super().__init__(dataset, batch_size=batch_size, shuffle=shuffle, collate_fn=collate_fn,
                          num_workers=num_workers, pin_memory=pin_memory)
 
