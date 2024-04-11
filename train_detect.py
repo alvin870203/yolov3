@@ -59,6 +59,7 @@ crop_scale = 0.8
 ratio_min = 0.5
 ratio_max = 2.0
 flip_p = 0.5
+min_size = 16.0  # filter out too small boxes in augmented training data, should >= min stride
 imgs_mean = (0.485, 0.456, 0.406)
 imgs_std = (0.229, 0.224, 0.225)
 multiscale_h = (320, 352, 384, 416, 448, 480, 512, 544, 576, 608)  # should be multiple of max stride, (img_h,) to disable
@@ -149,7 +150,7 @@ if dataset_name == 'voc' or dataset_name == 'nano_voc':
         perspective=perspective, degrees=degrees, translate=translate, scale=scale, shear=shear,
         brightness=brightness, contrast=contrast, saturation=saturation, hue=hue,
         crop_scale=crop_scale, ratio_min=ratio_min, ratio_max=ratio_max,
-        flip_p=flip_p, imgs_mean=imgs_mean, imgs_std=imgs_std,
+        flip_p=flip_p, min_size=min_size, imgs_mean=imgs_mean, imgs_std=imgs_std,
     )
     dataloader_config = VocConfig(**dataloader_args)
     dataloaders = {
@@ -161,7 +162,8 @@ if dataset_name == 'voc' or dataset_name == 'nano_voc':
     }
 elif dataset_name == 'blank_voc' or dataset_name == 'nano_blank_voc':
     from dataloaders.voc import BlankVocConfig, voc_collate_fn, BlankVocTrainDataLoader, BlankVocValDataLoader
-    dataloader_args = dict(img_h=img_h, img_w=img_w, letterbox=letterbox, fill=fill, imgs_mean=imgs_mean, imgs_std=imgs_std)
+    dataloader_args = dict(img_h=img_h, img_w=img_w, letterbox=letterbox, fill=fill, min_size=min_size,
+                           imgs_mean=imgs_mean, imgs_std=imgs_std)
     dataloader_config = BlankVocConfig(**dataloader_args)
     dataloaders = {
         'train': BlankVocTrainDataLoader(dataloader_config, data_dir, batch_size=batch_size, num_workers=n_worker,

@@ -118,6 +118,7 @@ class VocConfig:
     ratio_min: float = 0.5
     ratio_max: float = 2.0
     flip_p: float = 0.5
+    min_size: float = 16.0  # filter out too small boxes in augmented training data, should >= min stride
     imgs_mean: Tuple = (0.485, 0.456, 0.406)
     imgs_std: Tuple = (0.229, 0.224, 0.225)
 
@@ -150,7 +151,7 @@ class VocTrainDataLoader(DataLoader):
                                  interpolation=InterpolationMode.BILINEAR, antialias=True),
             v2.RandomHorizontalFlip(p=config.flip_p),
             v2.ClampBoundingBoxes(),
-            v2.SanitizeBoundingBoxes(),
+            v2.SanitizeBoundingBoxes(min_size=config.min_size),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
             Voc2Yolov3(),
@@ -197,6 +198,7 @@ class BlankVocConfig:
     img_w: int = 416
     letterbox: bool = True
     fill: Tuple = (123.0, 117.0, 104.0)
+    min_size: float = 16.0
     imgs_mean: Tuple = (0.485, 0.456, 0.406)
     imgs_std: Tuple = (0.229, 0.224, 0.225)
 
@@ -215,6 +217,8 @@ class BlankVocTrainDataLoader(DataLoader):
                     like=inp)
                 if isinstance(inp, tv_tensors.Image) else inp),
             Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=self.fill, antialias=True),
+            v2.ClampBoundingBoxes(),
+            v2.SanitizeBoundingBoxes(min_size=config.min_size),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
             Voc2Yolov3(),
@@ -247,6 +251,8 @@ class BlankVocValDataLoader(DataLoader):
                     like=inp)
                 if isinstance(inp, tv_tensors.Image) else inp),
             Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=self.fill, antialias=True),
+            v2.ClampBoundingBoxes(),
+            v2.SanitizeBoundingBoxes(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
             Voc2Yolov3(),

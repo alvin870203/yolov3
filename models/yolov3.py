@@ -550,7 +550,7 @@ class Yolov3(nn.Module):
             print(f"using fused Adam: {use_fused}")
         elif optimizer_type == 'sgd':
             # Create SGD optimizer
-            optimizer = torch.optim.SGD(optim_groups, lr=learning_rate, momentum=betas[0])
+            optimizer = torch.optim.SGD(optim_groups, lr=learning_rate, momentum=betas[0], nesterov=True)
             print(f"using SGD")
         else:
             raise ValueError(f"unrecognized optimizer_type: {optimizer_type}")
