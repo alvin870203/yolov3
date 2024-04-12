@@ -118,7 +118,7 @@ class VocConfig:
     ratio_min: float = 0.5
     ratio_max: float = 2.0
     flip_p: float = 0.5
-    min_size: float = 16.0  # filter out too small boxes in augmented training data, should >= min stride
+    min_size: float = 1.0  # filter out too small boxes in augmented training data
     imgs_mean: Tuple = (0.485, 0.456, 0.406)
     imgs_std: Tuple = (0.229, 0.224, 0.225)
 
@@ -198,7 +198,7 @@ class BlankVocConfig:
     img_w: int = 416
     letterbox: bool = True
     fill: Tuple = (123.0, 117.0, 104.0)
-    min_size: float = 16.0
+    min_size: float = 1.0
     imgs_mean: Tuple = (0.485, 0.456, 0.406)
     imgs_std: Tuple = (0.229, 0.224, 0.225)
 

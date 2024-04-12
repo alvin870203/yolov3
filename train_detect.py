@@ -59,7 +59,7 @@ crop_scale = 0.8
 ratio_min = 0.5
 ratio_max = 2.0
 flip_p = 0.5
-min_size = 16.0  # filter out too small boxes in augmented training data, should >= min stride
+min_size = 1.0  # filter out too small boxes in augmented training data
 imgs_mean = (0.485, 0.456, 0.406)
 imgs_std = (0.229, 0.224, 0.225)
 multiscale_h = (320, 352, 384, 416, 448, 480, 512, 544, 576, 608)  # should be multiple of max stride, (img_h,) to disable
