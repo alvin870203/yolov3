@@ -166,7 +166,7 @@ class VocTrainDataLoader(DataLoader):
                 v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
                                      interpolation=InterpolationMode.BILINEAR),
                 v2.RandomAffine(degrees=config.degrees, translate=(config.translate, config.translate),
-                                scale=(1 - config.scale, 1 + config.scale),
+                                scale=(1 - config.scale, 1 + config.scale * config.crop_scale),
                                 shear=(-config.shear, config.shear, -config.shear, config.shear),
                                 fill=config.fill, interpolation=InterpolationMode.BILINEAR),
                 v2.ToImage(),
