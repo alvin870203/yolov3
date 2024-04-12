@@ -103,24 +103,41 @@ class Voc2Yolov3(nn.Module):
 class VocConfig:
     img_h: int = 416
     img_w: int = 416
+    aug_type: str = 'default'  # 'default' or sannapersson'
     letterbox: bool = True
     fill: Tuple = (123.0, 117.0, 104.0)
-    perspective: float = 0.0
-    degrees: float = 0.0  # unit: deg
-    translate: float = 0.1
-    scale: float = 0.75
-    shear: float = 0.0  # unit: deg
+    color_p: float = 0.4
     brightness: float = 0.4
     contrast: float = 0.4
     saturation: float = 0.7
     hue: float = 0.015
+    blur_p: float = 0.1
+    blur_size_min: int = 3
+    blur_size_max: int = 7
+    blur_sigma_min: float = 0.1
+    blur_sigma_max: float = 2.0
+    autocontrast_p: float = 0.1
+    posterize_p: float = 0.1
+    posterize_bits: int = 4
+    grayscale_p: float = 0.1
+    channelshuffle_p: float = 0.05
+    perspective_p: float = 0.4
+    perspective: float = 0.0
+    translate: float = 0.1
+    scale: float = 0.75
+    shear_p: float = 0.4
+    shear: float = 0.0  # unit: deg
+    rotate_p: float = 0.4
+    degrees: float = 0.0  # unit: deg
     crop_scale: float = 0.8
     ratio_min: float = 0.5
     ratio_max: float = 2.0
     flip_p: float = 0.5
-    min_size: float = 1.0  # filter out too small boxes in augmented training data
+    min_size: float= 1.0  # filter out too small boxes in augmented training data
     imgs_mean: Tuple = (0.485, 0.456, 0.406)
     imgs_std: Tuple = (0.229, 0.224, 0.225)
+    multiscale_h: Tuple = (320, 352, 384, 416, 448, 480, 512, 544, 576, 608)  # should be multiple of max stride, (img_h,) to disable
+    multiscale_w: Tuple = (320, 352, 384, 416, 448, 480, 512, 544, 576, 608)  # should be multiple of max stride, (img_w,) to disable
 
 
 def voc_collate_fn(batch):
@@ -134,17 +151,62 @@ class VocTrainDataLoader(DataLoader):
     def __init__(self, config: VocConfig, data_dir, batch_size, num_workers, collate_fn, shuffle=True, pin_memory=True,
                  nano=False):  # if True: use only the first five images as the entire dataset
         self.config = config
-        transforms = v2.Compose([
-            v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
-                           saturation=config.saturation, hue=config.hue),
+        if config.aug_type == 'default':
+            transforms = v2.Compose([
+                v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
+                               saturation=config.saturation, hue=config.hue),
+                Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill,
+                       interpolation=InterpolationMode.BILINEAR, antialias=True),
+                v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
+                                     interpolation=InterpolationMode.BILINEAR),
+                v2.RandomAffine(degrees=config.degrees, translate=(config.translate, config.translate),
+                                scale=(1 - config.scale, 1 + config.scale),
+                                shear=(-config.shear, config.shear, -config.shear, config.shear),
+                                fill=config.fill, interpolation=InterpolationMode.BILINEAR),
+                v2.ToImage(),
+                v2.RandomResizedCrop(size=(config.img_h, config.img_w), scale=(config.crop_scale, 1.0),
+                                     ratio=(config.ratio_min, config.ratio_max),
+                                     interpolation=InterpolationMode.BILINEAR, antialias=True),
+                v2.RandomHorizontalFlip(p=config.flip_p),
+                v2.ClampBoundingBoxes(),
+                v2.SanitizeBoundingBoxes(min_size=config.min_size),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
+                Voc2Yolov3(),
+            ])
+        elif config.aug_type == 'sannapersson':
+            transforms = v2.Compose([
+            v2.RandomApply([
+                v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
+                               saturation=config.saturation, hue=config.hue),
+            ], p=config.color_p),
+            v2.RandomApply([
+                v2.GaussianBlur(kernel_size=(config.blur_size_min, config.blur_size_max),
+                                sigma=(config.blur_sigma_min, config.blur_sigma_max)),
+            ], p=config.blur_p),
+            v2.RandomAutocontrast(config.autocontrast_p),
+            v2.RandomPosterize(bits=config.posterize_bits, p=config.posterize_p),
+            v2.RandomGrayscale(p=config.grayscale_p),
+            v2.RandomApply([v2.RandomChannelPermutation(),], p=config.channelshuffle_p),
             Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill,
                    interpolation=InterpolationMode.BILINEAR, antialias=True),
-            v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
-                                 interpolation=InterpolationMode.BILINEAR),
-            v2.RandomAffine(degrees=config.degrees, translate=(config.translate, config.translate),
-                            scale=(1 - config.scale, 1 + config.scale),
-                            shear=(-config.shear, config.shear, -config.shear, config.shear),
-                            fill=config.fill, interpolation=InterpolationMode.BILINEAR),
+            v2.RandomApply([
+                v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
+                                     interpolation=InterpolationMode.BILINEAR),
+            ], p=config.perspective_p),
+            v2.RandomChoice([
+                v2.RandomApply([
+                    v2.RandomAffine(degrees=0.0, translate=(config.translate, config.translate),
+                                    scale=(1 - config.scale, 1 + config.scale * config.crop_scale),
+                                    shear=(-config.shear, config.shear, -config.shear, config.shear), fill=config.fill,
+                                    interpolation=InterpolationMode.BILINEAR),
+                ], p=config.shear_p),
+                v2.RandomApply([
+                    v2.RandomAffine(degrees=config.degrees, translate=(config.translate, config.translate),
+                                    scale=(1 - config.scale, 1 + config.scale * config.crop_scale),
+                                    shear=None, fill=config.fill, interpolation=InterpolationMode.BILINEAR),
+                ], p=config.rotate_p),
+            ]),
             v2.ToImage(),
             v2.RandomResizedCrop(size=(config.img_h, config.img_w), scale=(config.crop_scale, 1.0),
                                  ratio=(config.ratio_min, config.ratio_max),
@@ -156,8 +218,10 @@ class VocTrainDataLoader(DataLoader):
             v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
             Voc2Yolov3(),
         ])
+        else:
+            raise ValueError(f"Unknown aug_type: {config.aug_type}")
         dataset_2007_trainval = torchvision.datasets.VOCDetection(root=data_dir, year='2007', image_set='trainval',
-                                                               download=False, transforms=transforms)
+                                                                  download=False, transforms=transforms)
         dataset_2007_trainval_v2 = wrap_dataset_for_transforms_v2(dataset_2007_trainval, target_keys=['boxes', 'labels'])
         dataset_2012_trainval = torchvision.datasets.VOCDetection(root=data_dir, year='2012', image_set='trainval',
                                                                   download=False, transforms=transforms)

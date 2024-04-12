@@ -44,17 +44,32 @@ img_h = 416  # should be multiple of max stride
 img_w = 416  # should be multiple of max stride
 n_class = 20  # 20 for voc, 80 for coco
 # Transform related
+aug_type = 'default'  # 'default' or sannapersson'
 letterbox = True
 fill = (123.0, 117.0, 104.0)
-perspective = 0.0
-degrees = 0.0  # unit: deg
-translate = 0.1
-scale = 0.75
-shear = 0.0  # unit: deg
+color_p = 0.4
 brightness = 0.4
 contrast = 0.4
 saturation = 0.7
 hue = 0.015
+blur_p = 0.1
+blur_size_min = 3
+blur_size_max = 7
+blur_sigma_min = 0.1
+blur_sigma_max = 2.0
+autocontrast_p = 0.1
+posterize_p = 0.1
+posterize_bits = 4
+grayscale_p = 0.1
+channelshuffle_p = 0.05
+perspective_p = 0.4
+perspective = 0.0
+translate = 0.1
+scale = 0.75
+shear_p = 0.4
+shear = 0.0  # unit: deg
+rotate_p = 0.4
+degrees = 0.0  # unit: deg
 crop_scale = 0.8
 ratio_min = 0.5
 ratio_max = 2.0
@@ -146,11 +161,15 @@ data_dir = os.path.join('data', dataset_name.strip('nano_').strip('blank_'))
 if dataset_name == 'voc' or dataset_name == 'nano_voc':
     from dataloaders.voc import VocConfig, voc_collate_fn, VocTrainDataLoader, VocValDataLoader
     dataloader_args = dict(
-        img_h=img_h, img_w=img_w, letterbox=letterbox, fill=fill,
-        perspective=perspective, degrees=degrees, translate=translate, scale=scale, shear=shear,
-        brightness=brightness, contrast=contrast, saturation=saturation, hue=hue,
-        crop_scale=crop_scale, ratio_min=ratio_min, ratio_max=ratio_max,
-        flip_p=flip_p, min_size=min_size, imgs_mean=imgs_mean, imgs_std=imgs_std,
+        img_h=img_h, img_w=img_w, aug_type=aug_type, letterbox=letterbox, fill=fill,
+        color_p=color_p, brightness=brightness, contrast=contrast, saturation=saturation, hue=hue,
+        blur_p=blur_p, blur_size_min=blur_size_min, blur_size_max=blur_size_max,
+        blur_sigma_min=blur_sigma_min, blur_sigma_max=blur_sigma_max, autocontrast_p=autocontrast_p,
+        posterize_p=posterize_p, posterize_bits=posterize_bits, grayscale_p=grayscale_p,
+        channelshuffle_p=channelshuffle_p, perspective_p=perspective_p, perspective=perspective,
+        translate=translate, scale=scale, shear_p=shear_p, shear=shear, rotate_p=rotate_p, degrees=degrees,
+        crop_scale=crop_scale, ratio_min=ratio_min, ratio_max=ratio_max, flip_p=flip_p, min_size=min_size,
+        imgs_mean=imgs_mean, imgs_std=imgs_std,
     )
     dataloader_config = VocConfig(**dataloader_args)
     dataloaders = {

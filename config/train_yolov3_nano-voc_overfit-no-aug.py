@@ -15,24 +15,36 @@ n_class = 20
 
 # Transform related
 # No augmentation
+aug_type = 'default'
 letterbox = True
 fill = (123.0, 117.0, 104.0)
-perspective = 0.0
-degrees = 0.0
-translate = 0.0
-scale = 0.0
-shear = 0.0
+color_p = 0.0
 brightness = 0.0
 contrast = 0.0
 saturation = 0.0
 hue = 0.0
+blur_p = 0.0
+blur_size_min = 3
+blur_size_max = 7
+blur_sigma_min = 0.1
+blur_sigma_max = 2.0
+autocontrast_p = 0.0
+posterize_p = 0.0
+posterize_bits = 4
+grayscale_p = 0.0
+channelshuffle_p = 0.0
+perspective_p = 0.0
+perspective = 0.0
+translate = 0.0
+scale = 0.0
+shear_p = 0.0
+shear = 0.0
+rotate_p = 0.0
+degrees = 0.0
 crop_scale = 1.0
 ratio_min = 1.0
 ratio_max = 1.0
 flip_p = 0.0
-min_size = 1.0
-imgs_mean = (0.0, 0.0, 0.0)
-imgs_std = (1.0, 1.0, 1.0)
 multiscale_h = (416,)
 multiscale_w = (416,)
 
