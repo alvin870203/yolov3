@@ -79,7 +79,7 @@ use_fused = True  # somehow use_fused=True is incompatible to compile=True in th
 eval_interval = 3  # keep frequent if we'll overfit
 eval_iters = 3  # use entire val set to get good estimate
 score_thresh = 0.001
-iou_thresh = 0.6
+iou_thresh = 0.5  # for best map50
 
 # Log related
 timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())

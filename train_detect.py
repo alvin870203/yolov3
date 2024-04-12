@@ -103,7 +103,7 @@ use_fused = True  # whether to use fused optimizer kernel
 eval_interval = 100  # keep frequent if we'll overfit
 eval_iters = 200  # use more iterations to get good estimate
 score_thresh = 0.001  # threshold for (objectness score * class probability) when filtering inference results
-iou_thresh = 0.6  # NMS iou threshold when filtering inference results
+iou_thresh = 0.6  # NMS iou threshold when filtering inference results, 0.5 for mAP50, 0.6 for mAP
 use_torchmetrics = False  # whether to use cocoeval for detailed but slower metric computation
 # Log related
 timestamp = '00000000-000000'

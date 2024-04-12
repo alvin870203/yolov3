@@ -31,7 +31,7 @@ crop_scale = 0.8
 ratio_min = 0.5
 ratio_max = 2.0
 flip_p = 0.5
-min_size = 1.0  # TODO: whether unnecessary after solving the box_convert out_fmt typo, check all files
+min_size = 1.0
 imgs_mean = (0.0, 0.0, 0.0)
 imgs_std = (1.0, 1.0, 1.0)
 multiscale_h = (416,)  # TODO: enable multisclae
@@ -80,7 +80,7 @@ use_fused = True  # somehow use_fused=True is incompatible to compile=True in th
 eval_interval = 777  # keep frequent if we'll overfit  # TODO: <= warmup_iters, >= 1 epoch
 eval_iters = 78  # use entire val set to get good estimate  # TODO: decrease to speedup
 score_thresh = 0.001
-iou_thresh = 0.6
+iou_thresh = 0.5  # for best map50
 
 # Log related
 timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())
