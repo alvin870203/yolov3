@@ -155,6 +155,12 @@ class VocTrainDataLoader(DataLoader):
             transforms = v2.Compose([
                 v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
                                saturation=config.saturation, hue=config.hue),
+                v2.RandomApply([
+                    v2.GaussianBlur(kernel_size=(config.blur_size_min, config.blur_size_max),
+                                    sigma=(config.blur_sigma_min, config.blur_sigma_max)),
+                ], p=config.blur_p),
+                v2.RandomGrayscale(p=config.grayscale_p),
+                v2.RandomAutocontrast(p=config.autocontrast_p),
                 Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill,
                        interpolation=InterpolationMode.BILINEAR, antialias=True),
                 v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
@@ -176,48 +182,48 @@ class VocTrainDataLoader(DataLoader):
             ])
         elif config.aug_type == 'sannapersson':
             transforms = v2.Compose([
-            v2.RandomApply([
-                v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
-                               saturation=config.saturation, hue=config.hue),
-            ], p=config.color_p),
-            v2.RandomApply([
-                v2.GaussianBlur(kernel_size=(config.blur_size_min, config.blur_size_max),
-                                sigma=(config.blur_sigma_min, config.blur_sigma_max)),
-            ], p=config.blur_p),
-            v2.RandomAutocontrast(config.autocontrast_p),
-            v2.RandomPosterize(bits=config.posterize_bits, p=config.posterize_p),
-            v2.RandomGrayscale(p=config.grayscale_p),
-            v2.RandomApply([v2.RandomChannelPermutation(),], p=config.channelshuffle_p),
-            Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill,
-                   interpolation=InterpolationMode.BILINEAR, antialias=True),
-            v2.RandomApply([
-                v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
-                                     interpolation=InterpolationMode.BILINEAR),
-            ], p=config.perspective_p),
-            v2.RandomChoice([
                 v2.RandomApply([
-                    v2.RandomAffine(degrees=0.0, translate=(config.translate, config.translate),
-                                    scale=(1 - config.scale, 1 + config.scale * config.crop_scale),
-                                    shear=(-config.shear, config.shear, -config.shear, config.shear), fill=config.fill,
-                                    interpolation=InterpolationMode.BILINEAR),
-                ], p=config.shear_p),
+                    v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
+                                   saturation=config.saturation, hue=config.hue),
+                ], p=config.color_p),
                 v2.RandomApply([
-                    v2.RandomAffine(degrees=config.degrees, translate=(config.translate, config.translate),
-                                    scale=(1 - config.scale, 1 + config.scale * config.crop_scale),
-                                    shear=None, fill=config.fill, interpolation=InterpolationMode.BILINEAR),
-                ], p=config.rotate_p),
-            ]),
-            v2.ToImage(),
-            v2.RandomResizedCrop(size=(config.img_h, config.img_w), scale=(config.crop_scale, 1.0),
-                                 ratio=(config.ratio_min, config.ratio_max),
-                                 interpolation=InterpolationMode.BILINEAR, antialias=True),
-            v2.RandomHorizontalFlip(p=config.flip_p),
-            v2.ClampBoundingBoxes(),
-            v2.SanitizeBoundingBoxes(min_size=config.min_size),
-            v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
-            Voc2Yolov3(),
-        ])
+                    v2.GaussianBlur(kernel_size=(config.blur_size_min, config.blur_size_max),
+                                    sigma=(config.blur_sigma_min, config.blur_sigma_max)),
+                ], p=config.blur_p),
+                v2.RandomAutocontrast(p=config.autocontrast_p),
+                v2.RandomPosterize(bits=config.posterize_bits, p=config.posterize_p),
+                v2.RandomGrayscale(p=config.grayscale_p),
+                v2.RandomApply([v2.RandomChannelPermutation(),], p=config.channelshuffle_p),
+                Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill,
+                       interpolation=InterpolationMode.BILINEAR, antialias=True),
+                v2.RandomApply([
+                    v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
+                                         interpolation=InterpolationMode.BILINEAR),
+                ], p=config.perspective_p),
+                v2.RandomChoice([
+                    v2.RandomApply([
+                        v2.RandomAffine(degrees=0.0, translate=(config.translate, config.translate),
+                                        scale=(1 - config.scale, 1 + config.scale * config.crop_scale),
+                                        shear=(-config.shear, config.shear, -config.shear, config.shear),
+                                        fill=config.fill, interpolation=InterpolationMode.BILINEAR),
+                    ], p=config.shear_p),
+                    v2.RandomApply([
+                        v2.RandomAffine(degrees=config.degrees, translate=(config.translate, config.translate),
+                                        scale=(1 - config.scale, 1 + config.scale * config.crop_scale),
+                                        shear=None, fill=config.fill, interpolation=InterpolationMode.BILINEAR),
+                    ], p=config.rotate_p),
+                ]),
+                v2.ToImage(),
+                v2.RandomResizedCrop(size=(config.img_h, config.img_w), scale=(config.crop_scale, 1.0),
+                                     ratio=(config.ratio_min, config.ratio_max),
+                                     interpolation=InterpolationMode.BILINEAR, antialias=True),
+                v2.RandomHorizontalFlip(p=config.flip_p),
+                v2.ClampBoundingBoxes(),
+                v2.SanitizeBoundingBoxes(min_size=config.min_size),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=config.imgs_mean, std=config.imgs_std),
+                Voc2Yolov3(),
+            ])
         else:
             raise ValueError(f"Unknown aug_type: {config.aug_type}")
         dataset_2007_trainval = torchvision.datasets.VOCDetection(root=data_dir, year='2007', image_set='trainval',
