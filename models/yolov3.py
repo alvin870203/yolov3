@@ -566,7 +566,7 @@ class Yolov3(nn.Module):
         Args:
             imgs (Tensor): size(N, 3, img_h, img_w)
             target (Tensor): size(n_batch_obj, 6)
-            border (Tensor): size(N, 4), torch.int64, border of non-pad images, x1,y1,x2,y2 in pixels
+            border (Tensor): size(N, 4), torch.float32, border of non-pad images, x1,y1,x2,y2 normalized by img w,h
         Returns:
             pred (List[Tensor]): len(N)
                 pred[i]: size(n_pred_in_img_i, 8), post-processed restored x1,y1,x2,y2,conf,prob_class,idx_class,score from logits,
@@ -653,11 +653,11 @@ class Yolov3(nn.Module):
             ), dim=-1).to(torch.float32)  # size(n_thresh_pred, 8), x1,y1,x2,y2,conf,prob_class,idx_class,score
             # Clip boxes to non-pad image border
             if border is not None:
-                border_per_img = border[idx_img]  # size(4,), x1,y1,x2,y2 in pixels
-                pred_per_img[:, 0].clamp_(min=border_per_img[0])  # x1
-                pred_per_img[:, 1].clamp_(min=border_per_img[1])  # y1
-                pred_per_img[:, 2].clamp_(max=border_per_img[2])  # x2
-                pred_per_img[:, 3].clamp_(max=border_per_img[3])  # y2
+                border_per_img = border[idx_img]  # size(4,), x1,y1,x2,y2 normalized by img w,h
+                pred_per_img[:, 0].clamp_(min=border_per_img[0] * img_w)  # x1 in pixels
+                pred_per_img[:, 1].clamp_(min=border_per_img[1] * img_h)  # y1 in pixels
+                pred_per_img[:, 2].clamp_(max=border_per_img[2] * img_w)  # x2 in pixels
+                pred_per_img[:, 3].clamp_(max=border_per_img[3] * img_h)  # y2 in pixels
             # NMS
             nms_idx = batched_nms(  # don't work for BFloat16
                 boxes=pred_per_img[:, :4],  # size(n_thresh_pred, 4)

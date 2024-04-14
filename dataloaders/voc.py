@@ -100,7 +100,7 @@ class Voc2Yolov3(nn.Module):
             y_yolov3[i, 0] is the idx of the image in the batch, 0~batch_size-1, init with -1, assigned in collate_fn
             y_yolov3[i, 1] is the class index for the i-th object box, 0.0~float(n_class-1), no background class
             y_yolov3[i, 2:6] is the box coordinates for the i-th object box, normalized by img wh, CXCYWH format
-        border (Tensor): size(4,), torch.int64, the border box in XYXY format in pixels
+        border (Tensor): size(4,), torch.float32, the border box normalized by img wh, XYXY format
     """
     def forward(self, x, y_voc):
         img_h, img_w = x.shape[-2:]
@@ -111,7 +111,7 @@ class Voc2Yolov3(nn.Module):
             torch.full((n_obj, 1), -1), (y_voc['labels'][:-1] - 1).unsqueeze(1), cxcywhn),  # - 1 to remove background class
             dim=1
         ).to(torch.float32)
-        border = y_voc['boxes'][-1]
+        border = y_voc['boxes'][-1] / torch.tensor([img_w, img_h, img_w, img_h], dtype=torch.float32)
         return x, y_yolov3, border
 
     @classmethod
