@@ -404,7 +404,7 @@ class Yolov3(nn.Module):
                     iou = (1.0 - self.config.rescore) + iou * self.config.rescore
                 target_obj[idx_img, idx_anchor, cell_y, cell_x] = iou
 
-                # Classification - class smooth-BCE-with-logits loss  # FUTURE: focal loss
+                # Classification - class smooth-BCE-with-logits loss  # FUTURE: try CE loss for voc, since indep class; try focal loss
                 target_class = F.one_hot(target_class, self.config.n_class).to(dtype)
                 # Optional label smoothing for BCE: positive class: 1 - 0.5 * smooth, negative class: 0.5 * smooth
                 target_class = target_class * (1.0 - self.config.smooth) + 0.5 * self.config.smooth
@@ -559,13 +559,14 @@ class Yolov3(nn.Module):
 
 
     @torch.inference_mode()
-    def generate(self, imgs: Tensor, target: Optional[Tensor] = None) -> Tuple[Tensor, ...]:
+    def generate(self, imgs: Tensor, target: Optional[Tensor] = None, border: Optional[Tensor] = None) -> Tuple[Tensor, ...]:
         """
         Forward pass of single-scale inference.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         Args:
             imgs (Tensor): size(N, 3, img_h, img_w)
             target (Tensor): size(n_batch_obj, 6)
+            border (Tensor): size(N, 4), torch.int64, border of non-pad images, x1,y1,x2,y2 in pixels
         Returns:
             pred (List[Tensor]): len(N)
                 pred[i]: size(n_pred_in_img_i, 8), post-processed restored x1,y1,x2,y2,conf,prob_class,idx_class,score from logits,
@@ -638,7 +639,7 @@ class Yolov3(nn.Module):
         # Post-process
         pred = []  # inference output with NMS and post-processing
         img_h, img_w = imgs.shape[2:4]
-        for pred_per_img in raw_pred:  # size(n_raw_pred, 5 + n_class)
+        for idx_img, pred_per_img in enumerate(raw_pred):  # pred_per_img: size(n_raw_pred, 5 + n_class)
             # Score thresholding & box clipping
             score = pred_per_img[:, 4:5] * pred_per_img[:, 5:]  # size(n_raw_pred, n_class), conf * prob_class
             thresh_idx_pred, thresh_idx_class = torch.where(score > self.config.score_thresh)  # size(n_thresh_pred,)
@@ -650,6 +651,13 @@ class Yolov3(nn.Module):
                 thresh_idx_class.unsqueeze(-1),  # size(n_thresh_pred, 1), idx_class
                 score[thresh_idx_pred, thresh_idx_class].unsqueeze(-1),  # size(n_thresh_pred, 1), score
             ), dim=-1).to(torch.float32)  # size(n_thresh_pred, 8), x1,y1,x2,y2,conf,prob_class,idx_class,score
+            # Clip boxes to non-pad image border
+            if border is not None:
+                border_per_img = border[idx_img]  # size(4,), x1,y1,x2,y2 in pixels
+                pred_per_img[:, 0].clamp_(min=border_per_img[0])  # x1
+                pred_per_img[:, 1].clamp_(min=border_per_img[1])  # y1
+                pred_per_img[:, 2].clamp_(max=border_per_img[2])  # x2
+                pred_per_img[:, 3].clamp_(max=border_per_img[3])  # y2
             # NMS
             nms_idx = batched_nms(  # don't work for BFloat16
                 boxes=pred_per_img[:, :4],  # size(n_thresh_pred, 4)
@@ -699,13 +707,14 @@ if __name__ == '__main__':
 
     imgs = torch.randn((2, 3, config.img_h, config.img_w))
     target = torch.tensor([[0, 1, 0.51, 0.5, 0.5, 0.5], [0, 1, 0.51, 0.5, 0.5, 0.5]], dtype=torch.float32)
+    border = torch.tensor([[0, 0, config.img_w, config.img_h], [0, 0, config.img_w, config.img_h]], dtype=torch.int64)
 
     logit_scale3, logit_scale4, logit_scale5, loss, _, _, _ = model(imgs, target)
     print(f"\nlogits shape:\n{logit_scale3.shape=}\n{logit_scale4.shape=}\n{logit_scale5.shape=}\n")
     if loss is not None:
         print(f"loss shape: {loss.shape} (value={loss})\n")
 
-    pred, logit_scale3, logit_scale4, logit_scale5, loss, _, _, _ = model.generate(imgs, target)
+    pred, logit_scale3, logit_scale4, logit_scale5, loss, _, _, _ = model.generate(imgs, target, border)
     print(f"\nlogits shape:\n{len(pred)=}, {pred[0].shape=}\n{logit_scale3.shape=}\n{logit_scale4.shape=}\n{logit_scale5.shape=}\n")
     if loss is not None:
         print(f"loss shape: {loss.shape} (value={loss})\n")

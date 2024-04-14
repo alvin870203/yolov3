@@ -20,6 +20,27 @@ from torchvision.transforms.v2.functional._utils import _FillType
 from torchvision.datasets import wrap_dataset_for_transforms_v2
 
 
+def add_img_border_box(x, y):
+    """
+    Add a bounding box around the image, to record the image border transform.
+    Args:
+        x (PIL.Image.Image): size(H, W), RGB, 0~255
+        y (Dict): VOC annotation
+            y['boxes'] (tv_tensors.BoundingBoxes): size(n_obj, 4), in pixels, XYXY format
+            y['labels'] (Tensor): size(n_obj,), torch.int64, 1~n_class, with background class 0
+    Returns:
+        x (PIL.Image.Image): same as input
+        y (Dict): VOC annotation
+            y['boxes'] (tv_tensors.BoundingBoxes): size(n_obj+1, 4), with the last box as the border box
+            y['labels'] (Tensor): size(n_obj+1,), with the last label as 0 (background class)
+    """
+    img_w, img_h = x.size
+    border_box = torch.tensor([0, 0, img_w-1, img_h-1]).view(1, 4)
+    y['boxes'] = tv_tensors.wrap(torch.cat((y['boxes'], border_box), dim=0), like=y['boxes'])
+    y['labels'] = torch.cat((y['labels'], torch.tensor([0], dtype=torch.int64)))
+    return x, y
+
+
 class Resize(v2.Resize):
     def __init__(
             self,
@@ -69,25 +90,29 @@ class Voc2Yolov3(nn.Module):
     Args:
         x (Tensor): size(3, img_h, img_w), RGB, 0~255
         y_voc (Dict): VOC annotation
-            y_voc['boxes'] (tv_tensors.BoundingBoxes): size(n_obj, 4), in pixels, XYXY format
-            y_voc['labels'] (Tensor): size(n_obj,), torch.int64, 1~n_class, with background class 0
+            y_voc['boxes'] (tv_tensors.BoundingBoxes): size(n_obj+1, 4), in pixels, XYXY format
+                with the last box as the border box
+            y_voc['labels'] (Tensor): size(n_obj+1,), torch.int64, 1~n_class, with background class 0
+                with the last label as 0 (background class) for border box
     Returns:
         x (Tensor): size(3, img_h, img_w), RGB, 0~255
         y_yolov3 (Tensor): size(n_obj, 6), torch.float32
             y_yolov3[i, 0] is the idx of the image in the batch, 0~batch_size-1, init with -1, assigned in collate_fn
             y_yolov3[i, 1] is the class index for the i-th object box, 0.0~float(n_class-1), no background class
             y_yolov3[i, 2:6] is the box coordinates for the i-th object box, normalized by img wh, CXCYWH format
+        border (Tensor): size(4,), torch.int64, the border box in XYXY format in pixels
     """
     def forward(self, x, y_voc):
         img_h, img_w = x.shape[-2:]
-        cxcywh = box_convert(y_voc['boxes'], in_fmt='xyxy', out_fmt='cxcywh')
+        cxcywh = box_convert(y_voc['boxes'][:-1], in_fmt='xyxy', out_fmt='cxcywh')  # :-1 to exclude border box
         cxcywhn = cxcywh / torch.tensor([img_w, img_h, img_w, img_h])
         n_obj = cxcywh.shape[0]
         y_yolov3 = torch.cat((
-            torch.full((n_obj, 1), -1), (y_voc['labels'] - 1).unsqueeze(1), cxcywhn),  # - 1 to remove background class
+            torch.full((n_obj, 1), -1), (y_voc['labels'][:-1] - 1).unsqueeze(1), cxcywhn),  # - 1 to remove background class
             dim=1
         ).to(torch.float32)
-        return x, y_yolov3
+        border = y_voc['boxes'][-1]
+        return x, y_yolov3, border
 
     @classmethod
     def inv_target_transform(self, x, y_yolov3):
@@ -141,10 +166,10 @@ class VocConfig:
 
 
 def voc_collate_fn(batch):
-    xs, ys = zip(*batch)
+    xs, ys, borders = zip(*batch)
     for idx_img, y in enumerate(ys):
         y[:, 0] = idx_img
-    return torch.stack(xs, dim=0), torch.cat(ys, dim=0)
+    return torch.stack(xs, dim=0), torch.cat(ys, dim=0), torch.stack(borders, dim=0)
 
 
 class VocTrainDataLoader(DataLoader):
@@ -153,6 +178,7 @@ class VocTrainDataLoader(DataLoader):
         self.config = config
         if config.aug_type == 'default':
             transforms = v2.Compose([
+                add_img_border_box,
                 v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
                                saturation=config.saturation, hue=config.hue),
                 v2.RandomApply([
@@ -182,6 +208,7 @@ class VocTrainDataLoader(DataLoader):
             ])
         elif config.aug_type == 'sannapersson':
             transforms = v2.Compose([
+                add_img_border_box,
                 v2.RandomApply([
                     v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
                                    saturation=config.saturation, hue=config.hue),
@@ -245,6 +272,7 @@ class VocValDataLoader(DataLoader):
                  nano=False):  # if True: use only the first five images as the entire dataset
         self.config = config
         transforms = v2.Compose([
+            add_img_border_box,
             Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill, antialias=True),
             v2.ToImage(),
             v2.ClampBoundingBoxes(),
@@ -280,6 +308,7 @@ class BlankVocTrainDataLoader(DataLoader):
         self.config = config
         self.fill = {tv_tensors.Image: config.fill, "others": 0}
         transforms = v2.Compose([
+            add_img_border_box,
             v2.ToImage(),
             v2.Lambda(
                 lambda inp: tv_tensors.wrap(
@@ -314,6 +343,7 @@ class BlankVocValDataLoader(DataLoader):
         self.config = config
         self.fill = {tv_tensors.Image: config.fill, "others": 0}
         transforms = v2.Compose([
+            add_img_border_box,
             v2.ToImage(),
             v2.Lambda(
                 lambda inp: tv_tensors.wrap(

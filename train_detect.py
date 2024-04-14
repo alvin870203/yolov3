@@ -205,16 +205,16 @@ multiscale_img_h, multiscale_img_w = img_h, img_w
 dataiters = {'train': iter(dataloaders['train']), 'val': iter(dataloaders['val'])}
 def get_batch(split):
     try:
-        X, Y = next(dataiters[split])
+        X, Y, BORDER = next(dataiters[split])
     except StopIteration:
         dataiters[split] = iter(dataloaders[split])
-        X, Y = next(dataiters[split])
+        X, Y, BORDER = next(dataiters[split])
     if device_type == 'cuda':
-        # X, Y is pinned in dataloader, which allows us to move them to GPU asynchronously (non_blocking=True)
-        X, Y = X.to(device, non_blocking=True), Y.to(device, non_blocking=True)
+        # X, Y, BORDER is pinned in dataloader, which allows us to move them to GPU asynchronously (non_blocking=True)
+        X, Y, BORDER = X.to(device, non_blocking=True), Y.to(device, non_blocking=True), BORDER.to(device, non_blocking=True)
     else:
-        X, Y = X.to(device), Y.to(device)
-    return X, Y
+        X, Y, BORDER = X.to(device), Y.to(device), BORDER.to(device)
+    return X, Y, BORDER
 
 
 # Model init
@@ -319,10 +319,10 @@ def estimate_loss():
         else:
             metric = DetEvaluator()
         for idx_step in range(n_eval_steps):
-            X, Y = get_batch(split)
+            X, Y, BORDER = get_batch(split)
             eval_batch_size, _, eval_img_h, eval_img_w = X.shape
             with ctx:
-                pred, _, _, _, loss, loss_obj, loss_class, loss_box = model.generate(X, Y)
+                pred, _, _, _, loss, loss_obj, loss_class, loss_box = model.generate(X, Y, BORDER)
             losses[idx_step], losses_obj[idx_step], losses_class[idx_step], losses_box[idx_step] = \
                 loss.item(), loss_obj.item(), loss_class.item(), loss_box.item()
             pred_for_eval = [
@@ -379,7 +379,7 @@ if wandb_log:
 
 
 # Training loop
-X, Y = get_batch('train')  # fetch the very first batch
+X, Y, BORDER = get_batch('train')  # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0  # number of iterations in the lifetime of this process
 pbar = tqdm(total=max_iters, initial=iter_num, dynamic_ncols=True)
@@ -433,7 +433,7 @@ while True:
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
 
         # Immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, Y = get_batch('train')
+        X, Y, BORDER = get_batch('train')
 
         # Backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
@@ -449,6 +449,8 @@ while True:
 
     # Flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
+
+    # TODO: auto adjust labmda_box, lambda_obj, lambda_class based on loss_obj, loss_class, loss_box
 
     # Timing and logging
     t1 = time.time()
