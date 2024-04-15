@@ -111,6 +111,7 @@ weight_decay = 1e-2
 grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0
 decay_lr = 'cosine'  # whether to decay the learning rate, which type of lr scheduler. False, 'cosine', 'step'
 warmup_iters = 5000  # how many steps to warm up for
+warmup_bias_lr = 0.1  # bias lr can fall from warmup_bias_lr to learning_rate during warmup
 lr_decay_iters = 100000  # should be ~= max_iters; this is milestones if decay_lr='step'
 min_lr = 1e-4  # minimum learning rate, should be ~= learning_rate/10; this is gamma if decay_lr='step'
 use_fused = True  # whether to use fused optimizer kernel
@@ -349,8 +350,8 @@ def estimate_loss():
 if decay_lr == 'cosine':
     def get_lr(it):
         # 1) Linear warmup for warmup_iters steps
-        if it < warmup_iters:
-            return learning_rate * it / warmup_iters
+        if it < warmup_iters:  # return warmup lr for param_groups[0]&[1], and for param_groups[2] (i.e. bias lr)
+            return learning_rate * it / warmup_iters, warmup_bias_lr - (warmup_bias_lr - learning_rate) * it / warmup_iters
         # 2) If it > lr_decay_iters, return min learning rate
         if it > lr_decay_iters:
             return min_lr
@@ -362,8 +363,8 @@ if decay_lr == 'cosine':
 elif decay_lr == 'step':
     def get_lr(it):
         # 1) Linear warmup for warmup_iters steps
-        if it < warmup_iters:
-            return learning_rate * it / warmup_iters
+        if it < warmup_iters:  # return warmup lr for param_groups[0]&[1], and for param_groups[2] (i.e. bias lr)
+            return learning_rate * it / warmup_iters, warmup_bias_lr - (warmup_bias_lr - learning_rate) * it / warmup_iters
         # 2) After warmup, use step decay with min_lr as gamma
         # lr_decay_iters is a tuple of milestones
         return learning_rate * (min_lr ** sum(it >= milestone for milestone in lr_decay_iters))
@@ -389,15 +390,16 @@ while True:
 
     # Determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+    lr = [lr] * len(optimizer.param_groups) if not isinstance(lr, tuple) else [lr[0], lr[0], lr[1]]
+    for idx_group, param_group in enumerate(optimizer.param_groups):
+        param_group['lr'] = lr[idx_group]
 
     # Evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0:
         losses, losses_obj, losses_class, losses_box, map50 = estimate_loss()
         tqdm.write(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, train map50 {map50['train']:.4f}, val map50 {map50['val']:.4f}")
         if wandb_log:
-            wandb.log({"iter": iter_num, "lr": lr,
+            wandb.log({"iter": iter_num, "lr": lr[0],  # ignore bias lr warmup for logging simplicity
                        "train/loss": losses['train'], "val/loss": losses['val'],
                        "train/loss_obj": losses_obj['train'], "val/loss_obj": losses_obj['val'],
                        "train/loss_class": losses_class['train'], "val/loss_class": losses_class['val'],

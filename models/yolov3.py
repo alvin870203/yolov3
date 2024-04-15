@@ -519,18 +519,23 @@ class Yolov3(nn.Module):
         param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
 
         # Create optim groups. any parameters that is 2D will be weight decayed, otherwise no.
-        # i.e. all weight tensors in matmuls decay, all biases and norms don't.
-        # FUTURE: divide nodecay_params into two groups: bias & norm weight, so that bias lr can falls from warmup_bias_lr to lr during warmup
+        # i.e. all weight tensors in matmuls decay, all and norms don't.
+        # Divide nodecay_params into two groups: norm weight & bias,
+        # so that bias lr can fall from warmup_bias_lr to lr during warmup
         decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+        nodecay_weight_params = [p for n, p in param_dict.items() if p.dim() < 2 and 'bias' not in n]
+        nodecay_bias_params = [p for n, p in param_dict.items() if p.dim() < 2 and 'bias' in n]
         optim_groups = [
             {'params': decay_params, 'weight_decay': weight_decay},
-            {'params': nodecay_params, 'weight_decay': 0.0}
+            {'params': nodecay_weight_params, 'weight_decay': 0.0},
+            {'params': nodecay_bias_params, 'weight_decay': 0.0},
         ]
-        num_decay_params = sum(p.numel() for p in decay_params)
-        num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
-        print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+        n_decay_params = sum(p.numel() for p in decay_params)
+        n_nodecay_weight_params = sum(p.numel() for p in nodecay_weight_params)
+        n_nodecay_bias_params = sum(p.numel() for p in nodecay_bias_params)
+        print(f"num decayed parameter tensors: {len(decay_params)}, with {n_decay_params:,} parameters")
+        print(f"num non-decayed weight parameter tensors: {len(nodecay_weight_params)}, with {n_nodecay_weight_params:,} parameters")
+        print(f"num non-decayed bias parameter tensors: {len(nodecay_bias_params)}, with {n_nodecay_bias_params:,} parameters")
 
         if optimizer_type == 'adamw':
             # Create AdamW optimizer and use the fused version if it is available
