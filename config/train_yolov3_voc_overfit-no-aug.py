@@ -46,6 +46,9 @@ crop_scale = 1.0
 ratio_min = 1.0
 ratio_max = 1.0
 flip_p = 0.0
+min_size = 1.0
+imgs_mean = (0.0, 0.0, 0.0)
+imgs_std = (1.0, 1.0, 1.0)
 multiscale_h = (416,)
 multiscale_w = (416,)
 
@@ -83,6 +86,8 @@ weight_decay = 5e-4
 grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0
 decay_lr = 'cosine'
 warmup_iters = 777  # warmup 3 epochs
+warmup_bias_lr = 0.1
+warmup_momentum = 0.8
 lr_decay_iters = 77700  # should be ~= max_iters
 min_lr = 1e-4  # minimum learning rate, should be ~= learning_rate/10
 use_fused = True  # somehow use_fused=True is incompatible to compile=True in this model

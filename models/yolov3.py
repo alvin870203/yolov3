@@ -111,7 +111,7 @@ class Yolov3Head(nn.Module):
                                              kernel_size=1, stride=1, padding=0)
 
 
-    def forward(self, feat_stage3: Tensor, feat_stage4: Tensor, feat_stage5: Tensor) -> Tuple[Tensor, ...]:  # TODO: correct type hints
+    def forward(self, feat_stage3: Tensor, feat_stage4: Tensor, feat_stage5: Tensor) -> Tuple[Tensor, ...]:
         """
         Args:
             feat_stage3 (Tensor): (N, 256, img_h / 8, img_w / 8)
@@ -703,7 +703,6 @@ class Yolov3(nn.Module):
 if __name__ == '__main__':
 
     # Test the model by `python -m models.yolov3` from the workspace directory
-    # TODO: change following back to for Yolov3 with loss computation
     config = Yolov3Config()
     model = Yolov3(config)
     # print(model)

@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Any, Callable, cast, Dict, List, Literal, Optional, Sequence, Tuple, Type, Union
 import torch
 from torchvision.ops import box_iou
 from torchmetrics.detection import MeanAveragePrecision
@@ -16,7 +17,17 @@ class DetEvaluator():
 
 
     @torch.inference_mode()
-    def update(self, preds, targets):
+    def update(self, preds: List[Dict], targets: List[Dict]):
+        """
+        Args:
+            preds (List[Dict]): List of predictions for each image, where preds[i] is a dictionary containing:
+                boxes (Tensor): size(n_pred_in_img_i, 4), x1,y1,x2,y2 in pixels
+                labels (Tensor): size(n_pred_in_img_i,), torch.int64, without background class
+                scores (Tensor): size(n_pred_in_img_i,), objectness confidence * class probability
+            targets (List[Dict]): List of targets, where targets[i] is a dictionary containing:
+                boxes (Tensor): size(n_target_in_img_i, 4), x1,y1,x2,y2 in pixels
+                labels (Tensor): size(n_target_in_img_i,), torch.int64, without background class
+        """
         for pred, target in zip(preds, targets):
             n_pred, n_target = len(pred['boxes']), len(target['boxes'])
             device = pred['boxes'].device

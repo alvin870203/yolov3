@@ -112,6 +112,7 @@ grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0
 decay_lr = 'cosine'  # whether to decay the learning rate, which type of lr scheduler. False, 'cosine', 'step'
 warmup_iters = 5000  # how many steps to warm up for
 warmup_bias_lr = 0.1  # bias lr can fall from warmup_bias_lr to learning_rate during warmup
+warmup_momentum = 0.8  # warmup momentum (for sgd) from warmup_momentum to beta1
 lr_decay_iters = 100000  # should be ~= max_iters; this is milestones if decay_lr='step'
 min_lr = 1e-4  # minimum learning rate, should be ~= learning_rate/10; this is gamma if decay_lr='step'
 use_fused = True  # whether to use fused optimizer kernel
@@ -373,6 +374,11 @@ elif decay_lr == False:
 else:
     raise ValueError(f"Invalid decay_lr: {decay_lr}")
 
+def get_momentum(it):
+    if it < warmup_iters:
+        return warmup_momentum - (warmup_momentum - beta1) * it / warmup_iters
+    return beta1
+
 
 # Logging
 if wandb_log:
@@ -393,6 +399,8 @@ while True:
     lr = [lr] * len(optimizer.param_groups) if not isinstance(lr, tuple) else [lr[0], lr[0], lr[1]]
     for idx_group, param_group in enumerate(optimizer.param_groups):
         param_group['lr'] = lr[idx_group]
+        if 'momentum' in param_group:
+            param_group['momentum'] = get_momentum(iter_num)
 
     # Evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0:

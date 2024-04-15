@@ -86,7 +86,8 @@ weight_decay = 5e-4
 grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0  # TODO: try 10.0
 decay_lr = 'cosine'  # TODO: try step
 warmup_iters = 777  # warmup 3 epochs
-warmup_bias_lr = 0.1  # TODO: try 0.1 or remain 0.0 to disable
+warmup_bias_lr = 0.1  # TODO: try 0.1 or 0.18657 or remain 0.0 to disable
+warmup_momentum = 0.8  # TODO: try 0.8 or 0.59462 or remain the same as beta1
 lr_decay_iters = 77700  # should be ~= max_iters
 min_lr = 1e-4  # minimum learning rate, should be ~= learning_rate/10  # TODO: try 0.0
 use_fused = True  # somehow use_fused=True is incompatible to compile=True in this model

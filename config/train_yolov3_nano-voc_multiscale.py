@@ -84,6 +84,8 @@ weight_decay = 1e-4
 grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0
 decay_lr = False  # no lr scheduling
 #warmup_iters = 5  # warmup 5 epochs
+#warmup_bias_lr = 0.1
+#warmup_momentum = 0.8
 #lr_decay_iters = 3000  # should be ~= max_iters
 #min_lr = 0  # minimum learning rate, should be ~= learning_rate/10
 use_fused = True  # somehow use_fused=True is incompatible to compile=True in this model
