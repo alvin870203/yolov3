@@ -59,15 +59,15 @@ n_anchor_per_scale = 3
 anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326)))
 
 # Loss related  # TODO: adjust
-match_thresh = 3.3744  # from ultralytics/yolov3: hyp.VOC.yaml normalized by lambda_obj
+match_thresh = 3.3744  # from ultralytics/yolov3: hyp.VOC.yaml
 rescore = 1.0
 smooth = 0.0
-pos_weight_class = 0.5  # from ultralytics/yolov3: hyp.VOC.yaml normalized by lambda_obj
-pos_weight_obj = 0.67198  # from ultralytics/yolov3: hyp.VOC.yaml normalized by lambda_obj
+pos_weight_class = 0.5  # from ultralytics/yolov3: hyp.VOC.yaml
+pos_weight_obj = 0.67198  # from ultralytics/yolov3: hyp.VOC.yaml
 balance = (4.0, 1.0, 0.4)
-lambda_box = 0.02/0.51728  # from ultralytics/yolov3: hyp.VOC.yaml normalized by lambda_obj
-lambda_obj = 1.0
-lambda_class = 0.21638/0.51728  # from ultralytics/yolov3: hyp.VOC.yaml normalized by lambda_obj
+lambda_box = 0.02  # from ultralytics/yolov3: hyp.VOC.yaml  # TODO: try 0.05or0.02 to not scale
+lambda_obj = 0.51728 * ((416*416)/(640*640))  # TODO: try 1.0or0.51728 * ((416*416)/(640*640)) to scale from area 640*640 to 416*416
+lambda_class = 0.21638 * (20/80)  # from ultralytics/yolov3: hyp.VOC.yaml  # TODO: try 0.5or0.21638 * (20/80) to scale from 80 classes to 20 classes
 
 # Train related
 # the number of examples per iter:
@@ -80,11 +80,11 @@ max_iters = 77700  # 300 epochs, finish in TODO hr on my machine  # TODO: increa
 # Optimizer related
 optimizer_type = 'sgd'  # TODO: try adam with lr 1e-3
 learning_rate = 1e-2  # TODO: try adam with lr 1e-3
-beta1 = 0.9  # TODO: try 0.937
+beta1 = 0.9  # TODO: try 0.74832(same) again
 beta2 = 0.999
 weight_decay = 5e-4
-grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0
-decay_lr = 'cosine'  # TODO: try step or implement onecycle
+grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0  # TODO: try 10.0
+decay_lr = 'cosine'  # TODO: try step
 warmup_iters = 777  # warmup 3 epochs
 lr_decay_iters = 77700  # should be ~= max_iters
 min_lr = 1e-4  # minimum learning rate, should be ~= learning_rate/10  # TODO: try 0.0
