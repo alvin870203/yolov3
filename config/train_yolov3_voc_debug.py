@@ -78,7 +78,7 @@ max_iters = 77700  # 300 epochs, finish in TODO hr on my machine  # TODO: increa
 # Optimizer related
 optimizer_type = 'sgd'  # TODO: try adam with lr 1e-3
 learning_rate = 1e-2  # TODO: try adam with lr 1e-3
-beta1 = 0.9  # TODO: try 0.74832(same) again
+beta1 = 0.74832  # from ultralytics/yolov3: hyp.VOC.yaml
 beta2 = 0.999
 weight_decay = 5e-4
 grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0  # TODO: try 10.0
