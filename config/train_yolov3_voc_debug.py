@@ -7,8 +7,6 @@ task_name = 'detect'
 init_from = 'backbone'
 from_ckpt = 'saved/darknet53-448_imagenet2012/20240404-112658/ckpt_last.pt'
 
-# TODO: try hyp.VOC.yaml
-
 # Data related
 dataset_name = 'voc'
 img_h = 416  # TODO: increase to 640
@@ -65,9 +63,9 @@ smooth = 0.0
 pos_weight_class = 0.5  # from ultralytics/yolov3: hyp.VOC.yaml
 pos_weight_obj = 0.67198  # from ultralytics/yolov3: hyp.VOC.yaml
 balance = (4.0, 1.0, 0.4)
-lambda_box = 0.02  # from ultralytics/yolov3: hyp.VOC.yaml  # TODO: try 0.05or0.02 to not scale
-lambda_obj = 0.51728 * ((416*416)/(640*640))  # TODO: try 1.0or0.51728 * ((416*416)/(640*640)) to scale from area 640*640 to 416*416
-lambda_class = 0.21638 * (20/80)  # from ultralytics/yolov3: hyp.VOC.yaml  # TODO: try 0.5or0.21638 * (20/80) to scale from 80 classes to 20 classes
+lambda_box = 0.02  # from ultralytics/yolov3: hyp.VOC.yaml, no scale needed
+lambda_obj = 0.51728 * ((416*416)/(640*640))  # from ultralytics/yolov3: hyp.VOC.yaml, scaled from area 640*640 to 416*416TODO
+lambda_class = 0.21638 * (20/80)  # from ultralytics/yolov3: hyp.VOC.yaml, scaled from 80 classes to 20TODO classes
 
 # Train related
 # the number of examples per iter:
@@ -86,8 +84,8 @@ weight_decay = 5e-4
 grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0  # TODO: try 10.0
 decay_lr = 'cosine'  # TODO: try step
 warmup_iters = 777  # warmup 3 epochs
-warmup_bias_lr = 0.18657  # TODO: try 0.1 or 0.18657 or remain 0.0 to disable
-warmup_momentum = 0.59462  # TODO: try 0.8 or 0.59462 or remain the same as beta1
+warmup_bias_lr = 0.18657  # from ultralytics/yolov3: hyp.VOC.yaml
+warmup_momentum = 0.59462  # from ultralytics/yolov3: hyp.VOC.yaml
 lr_decay_iters = 77700  # should be ~= max_iters
 min_lr = 1e-4  # minimum learning rate, should be ~= learning_rate/10  # TODO: try 0.0
 use_fused = True  # somehow use_fused=True is incompatible to compile=True in this model
