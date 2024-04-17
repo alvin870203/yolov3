@@ -179,14 +179,6 @@ class VocTrainDataLoader(DataLoader):
         if config.aug_type == 'default':
             transforms = v2.Compose([
                 add_img_border_box,
-                v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
-                               saturation=config.saturation, hue=config.hue),
-                v2.RandomApply([
-                    v2.GaussianBlur(kernel_size=(config.blur_size_min, config.blur_size_max),
-                                    sigma=(config.blur_sigma_min, config.blur_sigma_max)),
-                ], p=config.blur_p),
-                v2.RandomGrayscale(p=config.grayscale_p),
-                v2.RandomAutocontrast(p=config.autocontrast_p),
                 Resize(size=(config.img_h, config.img_w), letterbox=config.letterbox, fill=config.fill,
                        interpolation=InterpolationMode.BILINEAR, antialias=True),
                 v2.RandomPerspective(distortion_scale=config.perspective, fill=config.fill,
@@ -199,6 +191,14 @@ class VocTrainDataLoader(DataLoader):
                 v2.RandomResizedCrop(size=(config.img_h, config.img_w), scale=(config.crop_scale, 1.0),
                                      ratio=(config.ratio_min, config.ratio_max),
                                      interpolation=InterpolationMode.BILINEAR, antialias=True),
+                v2.RandomApply([
+                    v2.GaussianBlur(kernel_size=(config.blur_size_min, config.blur_size_max),
+                                    sigma=(config.blur_sigma_min, config.blur_sigma_max)),
+                ], p=config.blur_p),
+                v2.RandomGrayscale(p=config.grayscale_p),
+                v2.RandomAutocontrast(p=config.autocontrast_p),
+                v2.ColorJitter(brightness=config.brightness, contrast=config.contrast,
+                               saturation=config.saturation, hue=config.hue),
                 v2.RandomHorizontalFlip(p=config.flip_p),
                 v2.ClampBoundingBoxes(),
                 v2.SanitizeBoundingBoxes(min_size=config.min_size),

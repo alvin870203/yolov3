@@ -14,7 +14,7 @@ img_w = 416  # TODO: increase to 640
 n_class = 20
 
 # Transform related
-aug_type = 'default'  # TODO: try 'sannapersson'
+aug_type = 'default'
 letterbox = True
 fill = (123.0, 117.0, 104.0)
 color_p = 1.0
@@ -28,10 +28,10 @@ blur_size_max = 7
 blur_sigma_min = 0.1
 blur_sigma_max = 2.0
 autocontrast_p = 0.1
-posterize_p = 0.0  # TODO: try 'sannapersson'
+posterize_p = 0.0
 posterize_bits = 4
 grayscale_p = 0.1
-channelshuffle_p = 0.0  # TODO: try 'sannapersson'
+channelshuffle_p = 0.0
 perspective_p = 1.0
 perspective = 0.0
 translate = 0.3
@@ -56,7 +56,7 @@ n_scale = 3
 n_anchor_per_scale = 3
 anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326)))
 
-# Loss related  # TODO: adjust
+# Loss related
 match_thresh = 3.3744  # from ultralytics/yolov3: hyp.VOC.yaml
 rescore = 1.0
 smooth = 0.0
@@ -76,12 +76,12 @@ batch_size = 64  # TODO: filled up the gpu memory on my machine
 max_iters = 77700  # 300 epochs, finish in TODO hr on my machine  # TODO: increase
 
 # Optimizer related
-optimizer_type = 'sgd'  # TODO: try adam with lr 1e-3
-learning_rate = 1e-2  # TODO: try adam with lr 1e-3
+optimizer_type = 'sgd'  # TODO: try adam with lr 3e-4
+learning_rate = 1e-2  # TODO: try adam with lr 3e-4
 beta1 = 0.74832  # from ultralytics/yolov3: hyp.VOC.yaml
 beta2 = 0.999
 weight_decay = 5e-4
-grad_clip = 0.0  # clip gradients at this value, or disable if == 0.0  # TODO: try 10.0
+grad_clip = 10.0  # clip gradients at this value, or disable if == 0.0
 decay_lr = 'cosine'  # TODO: try step
 warmup_iters = 777  # warmup 3 epochs
 warmup_bias_lr = 0.18657  # from ultralytics/yolov3: hyp.VOC.yaml
