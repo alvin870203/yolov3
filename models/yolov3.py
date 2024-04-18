@@ -399,7 +399,7 @@ class Yolov3(nn.Module):
                 loss_box += iou_loss.mean()
 
                 # Objectness - assign objectness target to responsible pred
-                iou = 1.0 - iou_loss.detach().clamp(min=0).to(dtype)  # size(n_responsible,), objectness target for responsible pred
+                iou = (1.0 - iou_loss).detach().clamp(min=0).to(dtype)  # size(n_responsible,), objectness target for responsible pred
                 if self.config.rescore < 1.0:
                     iou = (1.0 - self.config.rescore) + iou * self.config.rescore
                 target_obj[idx_img, idx_anchor, cell_y, cell_x] = iou
