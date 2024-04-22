@@ -76,8 +76,8 @@ batch_size = 64  # TODO: filled up the gpu memory on my machine
 max_iters = 77700  # 300 epochs, finish in TODO hr on my machine  # TODO: increase
 
 # Optimizer related
-optimizer_type = 'sgd'  # TODO: try adam with lr 3e-4
-learning_rate = 1e-2  # TODO: try adam with lr 3e-4
+optimizer_type = 'adam'  # TODO: try adam with lr 3e-4
+learning_rate = 1e-4  # TODO: try adam with lr 3e-4
 beta1 = 0.74832  # from ultralytics/yolov3: hyp.VOC.yaml
 beta2 = 0.999
 weight_decay = 5e-4
@@ -87,7 +87,7 @@ warmup_iters = 777  # warmup 3 epochs
 warmup_bias_lr = 0.18657  # from ultralytics/yolov3: hyp.VOC.yaml
 warmup_momentum = 0.59462  # from ultralytics/yolov3: hyp.VOC.yaml
 lr_decay_iters = 77700  # should be ~= max_iters
-min_lr = 1e-4  # minimum learning rate, should be ~= learning_rate/10  # TODO: try 0.0
+min_lr = 1e-6  # minimum learning rate, should be ~= learning_rate/10  # TODO: try 0.0
 use_fused = True  # somehow use_fused=True is incompatible to compile=True in this model
 
 # Eval related
