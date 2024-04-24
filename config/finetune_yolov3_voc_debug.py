@@ -1,11 +1,11 @@
-# Config for training YOLOv3 model on Pascal VOC 2007&2012 VOC dataset for object detection
+# Config for fine-tuning YOLOv3 model on Pascal VOC 2007&2012 VOC dataset for object detection
 # Train on VOC 2007 trainval and 2012 trainval, and evaluate on nano VOC 2007 test
 import time
 
 # Task related
 task_name = 'detect'
 init_from = 'pretrained'
-from_ckpt = 'saved/pjreddie/yolov3.pt'  # TODO: try 'saved/pjreddie/yolov3.pt'
+from_ckpt = 'saved/pjreddie/yolov3.pt'
 
 # Data related
 dataset_name = 'voc'
@@ -57,8 +57,8 @@ n_anchor_per_scale = 3
 anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326)))
 
 # Loss related
-match_by = 'wh_iou'  # TODO: try wh_iou
-match_thresh = 0.2  # from ultralytics/yolov3: hyp.VOC.yaml
+match_by = 'wh_ratio'  # TODO: try wh_iou
+match_thresh = 3.3744  # from ultralytics/yolov3: hyp.VOC.yaml
 rescore = 1.0
 smooth = 0.0
 pos_weight_class = 0.5  # from ultralytics/yolov3: hyp.VOC.yaml
@@ -74,21 +74,21 @@ lambda_class = 0.21638 * (20/80)  # from ultralytics/yolov3: hyp.VOC.yaml, scale
 # voc train set has 16,551 imgs, so 1 epoch ~= 259TODO iters
 gradient_accumulation_steps = 1
 batch_size = 64  # TODO: filled up the gpu memory on my machine
-max_iters = 77700  # 300 epochs, finish in TODO hr on my machine  # TODO: increase
+max_iters = 38850  # 150 epochs, finish in TODO hr on my machine
 
 # Optimizer related
-optimizer_type = 'adam'
-learning_rate = 1e-4  # TODO: try decrease
+optimizer_type = 'sgd'
+learning_rate = 0.00334  # from ultralytics/yolov3: hyp.VOC.yaml
 beta1 = 0.74832  # from ultralytics/yolov3: hyp.VOC.yaml
 beta2 = 0.999
-weight_decay = 5e-4  # TODO: try increase
+weight_decay = 5e-4  # from ultralytics/yolov3: hyp.VOC.yaml
 grad_clip = 10.0  # clip gradients at this value, or disable if == 0.0
 decay_lr = 'cosine'  # TODO: try step
 warmup_iters = 777  # warmup 3 epochs
 warmup_bias_lr = 0.18657  # from ultralytics/yolov3: hyp.VOC.yaml
 warmup_momentum = 0.59462  # from ultralytics/yolov3: hyp.VOC.yaml
-lr_decay_iters = 77700  # should be ~= max_iters
-min_lr = 1e-6  # minimum learning rate, should be ~= learning_rate/10  # TODO: try 0.0
+lr_decay_iters = 38850  # should be ~= max_iters
+min_lr = 0.00334*0.15135  # from ultralytics/yolov3: hyp.VOC.yaml
 use_fused = True  # somehow use_fused=True is incompatible to compile=True in this model
 
 # Eval related

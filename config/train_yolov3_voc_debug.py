@@ -76,7 +76,7 @@ gradient_accumulation_steps = 1
 batch_size = 64  # TODO: filled up the gpu memory on my machine
 max_iters = 77700  # 300 epochs, finish in TODO hr on my machine  # TODO: increase
 
-# Optimizer related
+# Optimizer related  # TODO: try all hyp.VOC.yaml except iters
 optimizer_type = 'adam'
 learning_rate = 1e-4
 beta1 = 0.74832  # from ultralytics/yolov3: hyp.VOC.yaml
