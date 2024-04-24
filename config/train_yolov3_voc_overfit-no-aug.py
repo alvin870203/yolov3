@@ -59,6 +59,7 @@ n_anchor_per_scale = 3
 anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326)))
 
 # Loss related
+match_by = 'wh_ratio'
 match_thresh = 4.0
 rescore = 1.0
 smooth = 0.0

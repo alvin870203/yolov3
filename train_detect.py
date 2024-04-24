@@ -89,6 +89,7 @@ anchors = (  # size(n_scale, n_anchor_per_scale, 2)
     ((116, 90), (156, 198), (373, 326)),  # scale5
 )  # w,h in pixels of a 416x416 image. IMPORTANT: from scale3 to scale5, order-aware!
 # Loss related
+match_by = 'wh_ratio'  # 'wh_iou' or 'wh_ratio'
 match_thresh = 4.0  # iou or wh ratio threshold to match a target to an anchor when calculating loss
 rescore = 1.0  # 0.0~1.0, rescore ratio; if 0.0, use 1 as objectness target; if 1.0, use iou as objectness target
 smooth = 0.0  # 0.0~1.0, smooth ratio for class BCE loss; 0.0 for no smoothing; 0.1 is a common choice
@@ -223,7 +224,7 @@ def get_batch(split):
 # Model init
 model_args = dict(
     img_h=img_h, img_w=img_w, n_class=n_class, n_scale=n_scale, n_anchor_per_scale=n_anchor_per_scale, anchors=anchors,
-    match_thresh=match_thresh, rescore=rescore, smooth=smooth,
+    match_by=match_by, match_thresh=match_thresh, rescore=rescore, smooth=smooth,
     pos_weight_class=pos_weight_class, pos_weight_obj=pos_weight_obj, balance=balance,
     lambda_box=lambda_box, lambda_obj=lambda_obj, lambda_class=lambda_class,
     score_thresh=score_thresh, iou_thresh=iou_thresh,
@@ -238,6 +239,7 @@ elif init_from == 'resume':
     print(f"Resuming training {model_name} from {from_ckpt}")
     # Resume training from a checkpoint
     checkpoint = torch.load(from_ckpt, map_location='cpu')  # load to CPU first to avoid GPU OOM
+    torch.set_rng_state(checkpoint['rng_state'].to('cpu'))
     checkpoint_model_args = checkpoint['model_args']
     assert model_name == checkpoint['config']['model_name'], "model_name mismatch"
     assert dataset_name == checkpoint['config']['dataset_name'], "dataset_name mismatch"
@@ -277,10 +279,15 @@ elif init_from == 'pretrained':
     print(f"Initializing a {model_name} model with entire pretrained weights: {from_ckpt}")
     # Init a new model with entire pretrained weights
     checkpoint = torch.load(from_ckpt, map_location='cpu')
+    if 'rng_state' in checkpoint:
+        torch.set_rng_state(checkpoint['rng_state'].to('cpu'))
     model_config = Yolov3Config(**model_args)
     model = Yolov3(model_config)
     state_dict = checkpoint['model']
-    model.load_state_dict(state_dict)
+    for k,v in list(state_dict.items()):  # dictionary intersection of matching keys and shapes
+        if (not k in model.state_dict()) or (model.state_dict()[k].shape != v.shape):
+            state_dict.pop(k)
+    model.load_state_dict(state_dict, strict=False)  # allow partial load
 else:
     raise ValueError(f"Invalid init_from: {init_from}")
 

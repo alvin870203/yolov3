@@ -4,8 +4,8 @@ import time
 
 # Task related
 task_name = 'detect'
-init_from = 'backbone'
-from_ckpt = 'saved/darknet53-448_imagenet2012/20240404-112658/ckpt_last.pt'
+init_from = 'pretrained'
+from_ckpt = 'saved/pjreddie/yolov3.pt'  # TODO: try 'saved/pjreddie/yolov3.pt'
 
 # Data related
 dataset_name = 'voc'
@@ -78,10 +78,10 @@ max_iters = 77700  # 300 epochs, finish in TODO hr on my machine  # TODO: increa
 
 # Optimizer related
 optimizer_type = 'adam'
-learning_rate = 1e-4
+learning_rate = 1e-4  # TODO: try decrease
 beta1 = 0.74832  # from ultralytics/yolov3: hyp.VOC.yaml
 beta2 = 0.999
-weight_decay = 5e-4
+weight_decay = 5e-4  # TODO: try increase
 grad_clip = 10.0  # clip gradients at this value, or disable if == 0.0
 decay_lr = 'cosine'  # TODO: try step
 warmup_iters = 777  # warmup 3 epochs

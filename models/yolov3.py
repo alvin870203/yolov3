@@ -55,6 +55,7 @@ class Yolov3Config:
         ((30, 61), (62, 45), (59, 119)),  # scale4 (from stage4 & upsampled stage5)
         ((116, 90), (156, 198), (373, 326)),  # scale5 (from stage5)
     )  # w,h in pixels of a 416x416 image. IMPORTANT: from scale3 to scale5, order-aware!
+    match_by: str = 'wh_ratio'  # 'wh_iou' or 'wh_ratio'
     match_thresh: float = 4.0  # iou or wh ratio threshold to match a target to an anchor when calculating loss
     rescore: float = 1.0  # 0.0~1.0, rescore ratio; if 0.0, use 1 as objectness target; if 1.0, use iou as objectness target
     smooth: float = 0.0  # 0.0~1.0, smooth ratio for class BCE loss; 0.0 for no smoothing; 0.1 is a common choice
@@ -259,7 +260,7 @@ class Yolov3(nn.Module):
                                     (self.head.scale4_stage4_conv6, self.stride_scale4),
                                     (self.head.scale5_stage5_conv6, self.stride_scale5)):
             b = detect_conv.bias.view(self.config.n_anchor_per_scale, -1)  # n_anchor_per_scale x (5 + n_class)
-            b.data[:, 4] += math.log(8 / (640 / stride) ** 2)  # obj (8 objects per 640 image)
+            b.data[:, 4] += math.log(8 / (640 / stride) ** 2)  # obj (8 objects per 640 image)  # TODO: try replace 8 with 2 for voc
             b.data[:, 5 : 5 + self.config.n_class] += (math.log(0.6 / (self.config.n_class - 0.99999)))  # cls
             detect_conv.bias = nn.Parameter(b.view(-1), requires_grad=True)
 
@@ -458,10 +459,21 @@ class Yolov3(nn.Module):
         target[:, :, 2:6] = target[:, :, 2:6] * torch.tensor([n_cell_w, n_cell_h, n_cell_w, n_cell_h], device=device)
         # Match target to anchors
         if n_batch_obj > 0:
-            # Match  # FUTURE: how about match by iou
-            wh_ratio = target[:, :, 4:6] / anchors.view(self.config.n_anchor_per_scale, 1, 2)  # size(n_anchor_per_scale, n_batch_obj, 2)
-            match_score = torch.max(torch.max(wh_ratio, 1.0 / wh_ratio), dim=-1).values  # size(n_anchor_per_scale, n_batch_obj)
-            mask_matched = match_score < self.config.match_thresh
+            if self.config.match_by == 'wh_ratio':
+                # Match by w,h ratio
+                wh_ratio = target[:, :, 4:6] / anchors.view(self.config.n_anchor_per_scale, 1, 2)  # size(n_anchor_per_scale, n_batch_obj, 2)
+                match_score = torch.max(torch.max(wh_ratio, 1.0 / wh_ratio), dim=-1).values  # size(n_anchor_per_scale, n_batch_obj)
+                mask_matched = match_score < self.config.match_thresh
+            elif self.config.match_by == 'wh_iou':
+                # Match by w,h iou
+                inter = torch.min(target[:, :, 4:6], anchors.view(self.config.n_anchor_per_scale, 1, 2)).prod(dim=-1)  # size(n_anchor_per_scale, n_batch_obj)
+                wh_iou = inter / (target[:, :, 4:6].prod(dim=-1)
+                                  + anchors.view(self.config.n_anchor_per_scale, 1, 2).prod(dim=-1)
+                                  - inter)  # size(n_anchor_per_scale, n_batch_obj)
+                mask_matched = wh_iou > self.config.match_thresh
+            else:
+                raise ValueError(f"Unknown match_by: {self.config.match_by}")
+
             target = target[mask_matched]  # size(n_matched, 7)
             n_matched = target.shape[0]
             # If box is near a border of two cells (exclude img edge),

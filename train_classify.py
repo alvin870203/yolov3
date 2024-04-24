@@ -200,6 +200,7 @@ elif init_from == 'pretrained':
     print(f"Initializing a {model_name} model with entire pretrained weights: {from_ckpt}")
     # Init a new model with entire pretrained weights
     checkpoint = torch.load(from_ckpt, map_location='cpu')
+    torch.set_rng_state(checkpoint['rng_state'].to('cpu'))
 else:
     raise ValueError(f"Invalid init_from: {init_from}")
 
