@@ -59,6 +59,7 @@ anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((11
 # Loss related
 match_by = 'wh_ratio'
 match_thresh = 4.0
+iou_loss_type = 'ciou'
 rescore = 1.0
 smooth = 0.0
 pos_weight_class = 1.0

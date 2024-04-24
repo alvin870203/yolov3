@@ -57,7 +57,6 @@ class Yolov3Config:
     )  # w,h in pixels of a 416x416 image. IMPORTANT: from scale3 to scale5, order-aware!
     match_by: str = 'wh_ratio'  # 'wh_iou' or 'wh_ratio'
     match_thresh: float = 4.0  # iou or wh ratio threshold to match a target to an anchor when calculating loss
-    iou_loss_type: str = 'giou'  # 'ciou' or 'giou'  # FUTURE: try other types of iou loss
     rescore: float = 1.0  # 0.0~1.0, rescore ratio; if 0.0, use 1 as objectness target; if 1.0, use iou as objectness target
     smooth: float = 0.0  # 0.0~1.0, smooth ratio for class BCE loss; 0.0 for no smoothing; 0.1 is a common choice
     pos_weight_class: float = 1.0  # weight for class BCE loss of positive examples, as if the positive examples are duplicated
@@ -393,18 +392,11 @@ class Yolov3(nn.Module):
                 pred_wh = (torch.sigmoid(logit_wh) * 2) ** 2 * responsible_anchor  # size(n_responsible, 2)
                 pred_box = torch.cat((pred_xy, pred_wh), dim=-1)  # size(n_responsible, 4)
                 # Compute iou between predictions and targets
-                if self.config.iou_loss_type == 'giou':
-                    iou_loss = generalized_box_iou_loss(  # iou_loss = 1 - iou
-                        box_convert(pred_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
-                        box_convert(target_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
-                        reduction='none'
-                    )  # size(n_responsible,)
-                elif self.config.iou_loss_type == 'ciou':
-                    iou_loss = complete_box_iou_loss(  # iou_loss = 1 - iou
-                        box_convert(pred_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
-                        box_convert(target_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
-                        reduction='none'
-                    )  # size(n_responsible,)
+                iou_loss = generalized_box_iou_loss(  # iou_loss = 1 - iou  # FUTURE: try other types of iou loss
+                    box_convert(pred_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
+                    box_convert(target_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
+                    reduction='none'
+                )  # size(n_responsible,)
                 loss_box += iou_loss.mean()
 
                 # Objectness - assign objectness target to responsible pred
@@ -417,9 +409,9 @@ class Yolov3(nn.Module):
                 target_class = F.one_hot(target_class, self.config.n_class).to(dtype)
                 # Optional label smoothing for BCE: positive class: 1 - 0.5 * smooth, negative class: 0.5 * smooth
                 target_class = target_class * (1.0 - self.config.smooth) + 0.5 * self.config.smooth
-                loss_class += F.binary_cross_entropy_with_logits(
-                    logit_class, target_class,
-                    reduction='mean', pos_weight=torch.tensor(self.config.pos_weight_class, device=device)
+                loss_class += F.cross_entropy(
+                    logit_class, torch.softmax(target_class, dim=-1),  # softmax to get valid target for CE loss
+                    reduction='mean'
                 )
 
             # Objectness - obj BCE loss  # FUTURE: autobalance, but it's disabled in YOLOv5, so maybe no good
@@ -614,11 +606,11 @@ class Yolov3(nn.Module):
                 n_cell_h_scale3, n_cell_w_scale3, self.anchors_scale3, self.stride_scale3
             )
         xy_scale3, wh_scale3, conf_scale3, prob_class_scale3 = torch.split(
-            torch.sigmoid(logit_scale3), [2, 2, 1, self.config.n_class], dim=-1
+            logit_scale3, [2, 2, 1, self.config.n_class], dim=-1
         )
-        xy_scale3 = (xy_scale3 * 2 - 0.5 + self.grid_scale3) * self.stride_scale3  # xy = (2.0 * sigmoid(t_xy) - 0.5 + c_xy) * stride
-        wh_scale3 = (wh_scale3 * 2) ** 2 * self.anchor_grid_scale3  # wh = (2.0 * sigmoid(t_wh)) ** 2 * p_wh
-        pred_scale3 = torch.cat([xy_scale3, wh_scale3, conf_scale3, prob_class_scale3], dim=-1)
+        xy_scale3 = (torch.sigmoid(xy_scale3) * 2 - 0.5 + self.grid_scale3) * self.stride_scale3  # xy = (2.0 * sigmoid(t_xy) - 0.5 + c_xy) * stride
+        wh_scale3 = (torch.sigmoid(wh_scale3) * 2) ** 2 * self.anchor_grid_scale3  # wh = (2.0 * sigmoid(t_wh)) ** 2 * p_wh
+        pred_scale3 = torch.cat([xy_scale3, wh_scale3, torch.sigmoid(conf_scale3), torch.softmax(prob_class_scale3, dim=-1)], dim=-1)
         raw_pred.append(pred_scale3.view(
             batch_size, self.config.n_anchor_per_scale * n_cell_h_scale3 * n_cell_w_scale3, 5 + self.config.n_class
         ))
@@ -630,11 +622,11 @@ class Yolov3(nn.Module):
                 n_cell_h_scale4, n_cell_w_scale4, self.anchors_scale4, self.stride_scale4
             )
         xy_scale4, wh_scale4, conf_scale4, prob_class_scale4 = torch.split(
-            torch.sigmoid(logit_scale4), [2, 2, 1, self.config.n_class], dim=-1
+            logit_scale4, [2, 2, 1, self.config.n_class], dim=-1
         )
-        xy_scale4 = (xy_scale4 * 2 - 0.5 + self.grid_scale4) * self.stride_scale4  # x,y
-        wh_scale4 = (wh_scale4 * 2) ** 2 * self.anchor_grid_scale4  # w,h
-        pred_scale4 = torch.cat([xy_scale4, wh_scale4, conf_scale4, prob_class_scale4], dim=-1)
+        xy_scale4 = (torch.sigmoid(xy_scale4) * 2 - 0.5 + self.grid_scale4) * self.stride_scale4  # x,y
+        wh_scale4 = (torch.sigmoid(wh_scale4) * 2) ** 2 * self.anchor_grid_scale4  # w,h
+        pred_scale4 = torch.cat([xy_scale4, wh_scale4, torch.sigmoid(conf_scale4), torch.softmax(prob_class_scale4, dim=-1)], dim=-1)
         raw_pred.append(pred_scale4.view(
             batch_size, self.config.n_anchor_per_scale * n_cell_h_scale4 * n_cell_w_scale4, 5 + self.config.n_class
         ))
@@ -646,11 +638,11 @@ class Yolov3(nn.Module):
                 n_cell_h_scale5, n_cell_w_scale5, self.anchors_scale5, self.stride_scale5
             )
         xy_scale5, wh_scale5, conf_scale5, prob_class_scale5 = torch.split(
-            torch.sigmoid(logit_scale5), [2, 2, 1, self.config.n_class], dim=-1
+            logit_scale5, [2, 2, 1, self.config.n_class], dim=-1
         )
-        xy_scale5 = (xy_scale5 * 2 - 0.5 + self.grid_scale5) * self.stride_scale5  # x,y
-        wh_scale5 = (wh_scale5 * 2) ** 2 * self.anchor_grid_scale5  # w,h
-        pred_scale5 = torch.cat([xy_scale5, wh_scale5, conf_scale5, prob_class_scale5], dim=-1)
+        xy_scale5 = (torch.sigmoid(xy_scale5) * 2 - 0.5 + self.grid_scale5) * self.stride_scale5  # x,y
+        wh_scale5 = (torch.sigmoid(wh_scale5) * 2) ** 2 * self.anchor_grid_scale5  # w,h
+        pred_scale5 = torch.cat([xy_scale5, wh_scale5, torch.sigmoid(conf_scale5), torch.softmax(prob_class_scale5, dim=-1)], dim=-1)
         raw_pred.append(pred_scale5.view(
             batch_size, self.config.n_anchor_per_scale * n_cell_h_scale5 * n_cell_w_scale5, 5 + self.config.n_class
         ))

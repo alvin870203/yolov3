@@ -91,6 +91,7 @@ anchors = (  # size(n_scale, n_anchor_per_scale, 2)
 # Loss related
 match_by = 'wh_ratio'  # 'wh_iou' or 'wh_ratio'
 match_thresh = 4.0  # iou or wh ratio threshold to match a target to an anchor when calculating loss
+iou_loss_type = 'giou'  # 'giou' or 'ciou'
 rescore = 1.0  # 0.0~1.0, rescore ratio; if 0.0, use 1 as objectness target; if 1.0, use iou as objectness target
 smooth = 0.0  # 0.0~1.0, smooth ratio for class BCE loss; 0.0 for no smoothing; 0.1 is a common choice
 pos_weight_class = 1.0  # weight for class BCE loss of positive examples, as if the positive examples are duplicated
@@ -224,7 +225,7 @@ def get_batch(split):
 # Model init
 model_args = dict(
     img_h=img_h, img_w=img_w, n_class=n_class, n_scale=n_scale, n_anchor_per_scale=n_anchor_per_scale, anchors=anchors,
-    match_by=match_by, match_thresh=match_thresh, rescore=rescore, smooth=smooth,
+    match_by=match_by, match_thresh=match_thresh, iou_loss_type=iou_loss_type, rescore=rescore, smooth=smooth,
     pos_weight_class=pos_weight_class, pos_weight_obj=pos_weight_obj, balance=balance,
     lambda_box=lambda_box, lambda_obj=lambda_obj, lambda_class=lambda_class,
     score_thresh=score_thresh, iou_thresh=iou_thresh,

@@ -59,6 +59,7 @@ anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((11
 # Loss related
 match_by = 'wh_iou'  # TODO: try wh_iou
 match_thresh = 0.2  # from ultralytics/yolov3: hyp.VOC.yaml
+iou_loss_type = 'giou'
 rescore = 1.0
 smooth = 0.0
 pos_weight_class = 0.5  # from ultralytics/yolov3: hyp.VOC.yaml
