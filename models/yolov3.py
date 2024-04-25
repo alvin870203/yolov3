@@ -667,6 +667,7 @@ class Yolov3(nn.Module):
         img_h, img_w = imgs.shape[2:4]
         for idx_img, pred_per_img in enumerate(raw_pred):  # pred_per_img: size(n_raw_pred, 5 + n_class)
             # Score thresholding & box clipping
+            # TODO: set a max number of detections per image to prevent memory issues
             score = pred_per_img[:, 4:5] * pred_per_img[:, 5:]  # size(n_raw_pred, n_class), conf * prob_class
             thresh_idx_pred, thresh_idx_class = torch.where(score > self.config.score_thresh)  # size(n_thresh_pred,)
             pred_per_img = torch.cat((
