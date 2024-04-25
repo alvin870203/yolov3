@@ -253,6 +253,7 @@ class Yolov3(nn.Module):
             module.inplace = True
 
 
+    @torch.no_grad()
     def _init_biases(self):
         """
         Initialize biases into last conv layers for detection logits.
