@@ -55,6 +55,7 @@ class Yolov3Config:
         ((30, 61), (62, 45), (59, 119)),  # scale4 (from stage4 & upsampled stage5)
         ((116, 90), (156, 198), (373, 326)),  # scale5 (from stage5)
     )  # w,h in pixels of a 416x416 image. IMPORTANT: from scale3 to scale5, order-aware!
+    init_weight: bool = True  # whether to init weights & biases
     match_by: str = 'wh_ratio'  # 'wh_iou' or 'wh_ratio'
     match_thresh: float = 4.0  # iou or wh ratio threshold to match a target to an anchor when calculating loss
     iou_loss_type: str = 'giou'  # 'ciou' or 'giou'  # FUTURE: try other types of iou loss
@@ -66,6 +67,7 @@ class Yolov3Config:
     lambda_box: float = 0.05  # weight for box loss
     lambda_obj: float = 1.0  # weight for obj loss
     lambda_class: float = 0.5  # weight for class loss
+    max_n_pred_per_img: int = 1000  # max number of predictions per image
     score_thresh: float = 0.001  # threshold for (objectness score * class probability) when filtering inference results
     iou_thresh: float = 0.6  # NMS iou threshold when filtering inference results
 
@@ -234,10 +236,11 @@ class Yolov3(nn.Module):
         # Balance for obj loss of different scales
         self.balance_scale3, self.balance_scale4, self.balance_scale5 = config.balance
 
-        # Init all weights & biases
-        self.apply(self._init_weights)
-        # Apply special init to last conv layers for detection logits
-        self._init_biases()
+        if self.config.init_weight:
+            # Init all weights & biases
+            self.apply(self._init_weights)
+            # Apply special init to last conv layers for detection logits
+            self._init_biases()
 
         # Report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -263,7 +266,7 @@ class Yolov3(nn.Module):
                                     (self.head.scale5_stage5_conv6, self.stride_scale5)):
             b = detect_conv.bias.view(self.config.n_anchor_per_scale, -1)  # n_anchor_per_scale x (5 + n_class)
             b.data[:, 4] += math.log(8 / (640 / stride) ** 2)  # obj (8 objects per 640 image)  # TODO: try replace 8 with 2 for voc
-            b.data[:, 5 : 5 + self.config.n_class] += (math.log(0.6 / (self.config.n_class - 0.99999)))  # cls
+            b.data[:, 5 : 5 + self.config.n_class] += math.log(0.6 / (self.config.n_class - 0.99999))  # cls
             detect_conv.bias = nn.Parameter(b.view(-1), requires_grad=True)
 
 
@@ -678,6 +681,8 @@ class Yolov3(nn.Module):
                 thresh_idx_class.unsqueeze(-1),  # size(n_thresh_pred, 1), idx_class
                 score[thresh_idx_pred, thresh_idx_class].unsqueeze(-1),  # size(n_thresh_pred, 1), score
             ), dim=-1).to(torch.float32)  # size(n_thresh_pred, 8), x1,y1,x2,y2,conf,prob_class,idx_class,score
+            #  Sort by score and remove excess predictions to prevent OOM & long computation time
+            pred_per_img = pred_per_img[pred_per_img[:, 7].argsort(descending=True)[:self.config.max_n_pred_per_img]]
             # Clip boxes to non-pad image border
             if border is not None:
                 border_per_img = border[idx_img]  # size(4,), x1,y1,x2,y2 normalized by img w,h

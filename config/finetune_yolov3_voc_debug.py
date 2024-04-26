@@ -55,6 +55,7 @@ model_name = 'yolov3'
 n_scale = 3
 n_anchor_per_scale = 3
 anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326)))
+init_weight = True
 
 # Loss related
 match_by = 'wh_ratio'  # TODO: try wh_iou
@@ -98,6 +99,7 @@ eval_interval = 777  # keep frequent if we'll overfit  # TODO: <= warmup_iters, 
 eval_iters = 78  # use entire val set to get good estimate  # TODO: decrease to speedup
 score_thresh = 0.001
 iou_thresh = 0.5  # for best map50
+max_n_pred_per_img = 1000
 
 # Log related
 timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())

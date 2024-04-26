@@ -88,6 +88,7 @@ anchors = (  # size(n_scale, n_anchor_per_scale, 2)
     ((30, 61), (62, 45), (59, 119)),  # scale4
     ((116, 90), (156, 198), (373, 326)),  # scale5
 )  # w,h in pixels of a 416x416 image. IMPORTANT: from scale3 to scale5, order-aware!
+init_weight = True  # whether to init weights & biases
 # Loss related
 match_by = 'wh_ratio'  # 'wh_iou' or 'wh_ratio'
 match_thresh = 4.0  # iou or wh ratio threshold to match a target to an anchor when calculating loss
@@ -123,6 +124,7 @@ eval_interval = 100  # keep frequent if we'll overfit
 eval_iters = 200  # use more iterations to get good estimate
 score_thresh = 0.001  # threshold for (objectness score * class probability) when filtering inference results
 iou_thresh = 0.6  # NMS iou threshold when filtering inference results, 0.5 for mAP50, 0.6 for mAP
+max_n_pred_per_img = 1000  # maximum number of predictions per image
 use_torchmetrics = False  # whether to use cocoeval for detailed but slower metric computation
 # Log related
 timestamp = '00000000-000000'
@@ -228,7 +230,7 @@ model_args = dict(
     match_by=match_by, match_thresh=match_thresh, iou_loss_type=iou_loss_type, rescore=rescore, smooth=smooth,
     pos_weight_class=pos_weight_class, pos_weight_obj=pos_weight_obj, balance=balance,
     lambda_box=lambda_box, lambda_obj=lambda_obj, lambda_class=lambda_class,
-    score_thresh=score_thresh, iou_thresh=iou_thresh,
+    score_thresh=score_thresh, iou_thresh=iou_thresh, max_n_pred_per_img=max_n_pred_per_img, init_weight=init_weight,
 )  # start with model_args from command line
 
 if init_from == 'scratch':
