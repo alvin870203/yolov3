@@ -5,7 +5,7 @@ import time
 # Task related
 task_name = 'detect'
 init_from = 'backbone'
-from_ckpt = 'saved/pjreddie/darknet53_448.pt'  # TODO: try 'saved/pjreddie/darknet53_448.pt'
+from_ckpt = 'saved/darknet53-448_imagenet2012/20240404-112658/ckpt_last.pt'  # TODO: try 'saved/pjreddie/darknet53_448.pt'
 
 # Data related
 dataset_name = 'voc'
