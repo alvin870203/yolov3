@@ -57,6 +57,7 @@ n_scale = 3
 n_anchor_per_scale = 3
 anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326)))
 init_weight = True
+init_bias = True
 
 # Loss related
 match_by = 'wh_ratio'

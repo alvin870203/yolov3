@@ -88,7 +88,8 @@ anchors = (  # size(n_scale, n_anchor_per_scale, 2)
     ((30, 61), (62, 45), (59, 119)),  # scale4
     ((116, 90), (156, 198), (373, 326)),  # scale5
 )  # w,h in pixels of a 416x416 image. IMPORTANT: from scale3 to scale5, order-aware!
-init_weight = True  # whether to init weights & biases
+init_weight = True  # whether to init weights
+init_bias = True  # whether to init biases
 # Loss related
 match_by = 'wh_ratio'  # 'wh_iou' or 'wh_ratio'
 match_thresh = 4.0  # iou or wh ratio threshold to match a target to an anchor when calculating loss
@@ -227,10 +228,11 @@ def get_batch(split):
 # Model init
 model_args = dict(
     img_h=img_h, img_w=img_w, n_class=n_class, n_scale=n_scale, n_anchor_per_scale=n_anchor_per_scale, anchors=anchors,
+    init_weight=init_weight, init_bias=init_bias,
     match_by=match_by, match_thresh=match_thresh, iou_loss_type=iou_loss_type, rescore=rescore, smooth=smooth,
     pos_weight_class=pos_weight_class, pos_weight_obj=pos_weight_obj, balance=balance,
     lambda_box=lambda_box, lambda_obj=lambda_obj, lambda_class=lambda_class,
-    score_thresh=score_thresh, iou_thresh=iou_thresh, max_n_pred_per_img=max_n_pred_per_img, init_weight=init_weight,
+    score_thresh=score_thresh, iou_thresh=iou_thresh, max_n_pred_per_img=max_n_pred_per_img,
 )  # start with model_args from command line
 
 if init_from == 'scratch':

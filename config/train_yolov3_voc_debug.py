@@ -5,7 +5,7 @@ import time
 # Task related
 task_name = 'detect'
 init_from = 'backbone'
-from_ckpt = 'saved/darknet53-448_imagenet2012/20240404-112658/ckpt_last.pt'  # TODO: try 'saved/pjreddie/darknet53_448.pt'
+from_ckpt = 'saved/pjreddie/darknet53_448.pt'  # TODO: try 'saved/pjreddie/darknet53_448.pt'
 
 # Data related
 dataset_name = 'voc'
@@ -56,6 +56,7 @@ n_scale = 3
 n_anchor_per_scale = 3
 anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326)))
 init_weight = True  # TODO: try False
+init_bias = True  # TODO: try False
 
 # Loss related
 match_by = 'wh_iou'  # TODO: try wh_iou

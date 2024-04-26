@@ -55,7 +55,8 @@ class Yolov3Config:
         ((30, 61), (62, 45), (59, 119)),  # scale4 (from stage4 & upsampled stage5)
         ((116, 90), (156, 198), (373, 326)),  # scale5 (from stage5)
     )  # w,h in pixels of a 416x416 image. IMPORTANT: from scale3 to scale5, order-aware!
-    init_weight: bool = True  # whether to init weights & biases
+    init_weight: bool = True  # whether to init weights
+    init_bias: bool = True  # whether to init biases
     match_by: str = 'wh_ratio'  # 'wh_iou' or 'wh_ratio'
     match_thresh: float = 4.0  # iou or wh ratio threshold to match a target to an anchor when calculating loss
     iou_loss_type: str = 'giou'  # 'ciou' or 'giou'  # FUTURE: try other types of iou loss
@@ -236,10 +237,9 @@ class Yolov3(nn.Module):
         # Balance for obj loss of different scales
         self.balance_scale3, self.balance_scale4, self.balance_scale5 = config.balance
 
-        if self.config.init_weight:
-            # Init all weights & biases
+        if self.config.init_weight:  # init all weights
             self.apply(self._init_weights)
-            # Apply special init to last conv layers for detection logits
+        if self.config.init_bias:  # apply special init to last conv layers for detection logits
             self._init_biases()
 
         # Report number of parameters
@@ -670,7 +670,6 @@ class Yolov3(nn.Module):
         img_h, img_w = imgs.shape[2:4]
         for idx_img, pred_per_img in enumerate(raw_pred):  # pred_per_img: size(n_raw_pred, 5 + n_class)
             # Score thresholding & box clipping
-            # TODO: set a max number of detections per image to prevent memory issues
             score = pred_per_img[:, 4:5] * pred_per_img[:, 5:]  # size(n_raw_pred, n_class), conf * prob_class
             thresh_idx_pred, thresh_idx_class = torch.where(score > self.config.score_thresh)  # size(n_thresh_pred,)
             pred_per_img = torch.cat((
@@ -681,7 +680,7 @@ class Yolov3(nn.Module):
                 thresh_idx_class.unsqueeze(-1),  # size(n_thresh_pred, 1), idx_class
                 score[thresh_idx_pred, thresh_idx_class].unsqueeze(-1),  # size(n_thresh_pred, 1), score
             ), dim=-1).to(torch.float32)  # size(n_thresh_pred, 8), x1,y1,x2,y2,conf,prob_class,idx_class,score
-            #  Sort by score and remove excess predictions to prevent OOM & long computation time
+            # Sort by score and remove excess predictions to prevent OOM & long computation time
             pred_per_img = pred_per_img[pred_per_img[:, 7].argsort(descending=True)[:self.config.max_n_pred_per_img]]
             # Clip boxes to non-pad image border
             if border is not None:
