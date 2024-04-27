@@ -5,7 +5,7 @@ import time
 # Task related
 task_name = 'detect'
 init_from = 'backbone'
-from_ckpt = 'saved/darknet53-448_imagenet2012/20240404-112658/ckpt_last.pt'  # TODO: try 'saved/pjreddie/darknet53_448.pt'
+from_ckpt = 'saved/pjreddie/darknet53_448.pt'
 
 # Data related
 dataset_name = 'voc'
@@ -55,11 +55,11 @@ model_name = 'yolov3'
 n_scale = 3
 n_anchor_per_scale = 3
 anchors = (((10, 13), (16, 30), (33, 23)), ((30, 61), (62, 45), (59, 119)), ((116, 90), (156, 198), (373, 326)))
-init_weight = True  # TODO: try False
-init_bias = True  # TODO: try False
+init_weight = False
+init_bias = False
 
 # Loss related
-match_by = 'wh_iou'  # TODO: try wh_iou
+match_by = 'wh_iou'
 match_thresh = 0.2  # from ultralytics/yolov3: hyp.VOC.yaml
 iou_loss_type = 'giou'
 rescore = 1.0
@@ -79,19 +79,19 @@ gradient_accumulation_steps = 1
 batch_size = 64  # TODO: filled up the gpu memory on my machine
 max_iters = 77700  # 300 epochs, finish in TODO hr on my machine  # TODO: increase
 
-# Optimizer related  # TODO: try all hyp.VOC.yaml except iters
+# Optimizer related
 optimizer_type = 'adam'
 learning_rate = 1e-4
 beta1 = 0.74832  # from ultralytics/yolov3: hyp.VOC.yaml
 beta2 = 0.999
 weight_decay = 5e-4
 grad_clip = 10.0  # clip gradients at this value, or disable if == 0.0
-decay_lr = 'cosine'  # TODO: try step
+decay_lr = 'cosine'
 warmup_iters = 777  # warmup 3 epochs
 warmup_bias_lr = 0.18657  # from ultralytics/yolov3: hyp.VOC.yaml
 warmup_momentum = 0.59462  # from ultralytics/yolov3: hyp.VOC.yaml
 lr_decay_iters = 77700  # should be ~= max_iters
-min_lr = 1e-6  # minimum learning rate, should be ~= learning_rate/10  # TODO: try 0.0
+min_lr = 1e-6  # minimum learning rate, should be ~= learning_rate/10
 use_fused = True  # somehow use_fused=True is incompatible to compile=True in this model
 
 # Eval related
@@ -100,7 +100,7 @@ eval_interval = 777  # keep frequent if we'll overfit  # TODO: <= warmup_iters, 
 eval_iters = 78  # use entire val set to get good estimate  # TODO: decrease to speedup
 score_thresh = 0.001
 iou_thresh = 0.5  # for best map50
-max_n_pred_per_img = 1000  # TODO: try 10000
+max_n_pred_per_img = 10000
 
 # Log related
 timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())
