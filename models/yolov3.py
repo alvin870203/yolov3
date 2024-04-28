@@ -25,7 +25,8 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 from torch.nn import functional as F
-from torchvision.ops import box_iou, box_convert, clip_boxes_to_image, nms, batched_nms, complete_box_iou_loss, generalized_box_iou_loss
+from torchvision.ops import box_iou, box_convert, clip_boxes_to_image, nms, batched_nms, generalized_box_iou_loss
+from torchvision.ops.diou_loss import _diou_iou_loss
 import thop  # for FLOPs computation
 from models.darknet53 import Darknet53Config, Darknet53Conv2d, Darknet53Backbone
 
@@ -378,7 +379,9 @@ class Yolov3(nn.Module):
         for logit, anchors, balance in ((logit_scale3, self.anchors_scale3, self.balance_scale3),
                                         (logit_scale4, self.anchors_scale4, self.balance_scale4),
                                         (logit_scale5, self.anchors_scale5, self.balance_scale5)):
-            target_class, target_box, responsible_idx, responsible_anchor = self._build_target(logit, target, anchors)  # size(n_responsible,)
+            target_class, target_box, responsible_idx, responsible_anchor = self._build_target(
+                logit, target, anchors
+            )  # size(n_responsible,); size(n_responsible, 4); size(n_responsible, 4); size(n_responsible, 2)
             idx_img, idx_anchor, cell_y, cell_x = responsible_idx.T  # size(n_responsible,)
             n_responsible = idx_img.shape[0]
             # Init objectness target to zeros (not responsible)
@@ -404,11 +407,17 @@ class Yolov3(nn.Module):
                         reduction='none'
                     )  # size(n_responsible,)
                 elif self.config.iou_loss_type == 'ciou':
-                    iou_loss = complete_box_iou_loss(  # iou_loss = 1 - iou
+                    # Not using torchvision complete_iou_loss since it might produce NaN due to underflow of wh during cxcywh -> xyxy -> cxcywh
+                    diou_loss, iou_for_ciou = _diou_iou_loss(
                         box_convert(pred_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
                         box_convert(target_box, in_fmt='cxcywh', out_fmt='xyxy'),  # size(n_responsible, 4)
-                        reduction='none'
                     )  # size(n_responsible,)
+                    pred_w, pred_h = pred_wh.unbind(dim=-1)  # size(n_responsible,)
+                    target_w, target_h = target_box[:, 2:4].unbind(dim=-1)  # size(n_responsible,)
+                    v = (4 / (torch.pi ** 2)) * (torch.atan(target_w / target_h) - torch.atan(pred_w / pred_h)).pow(2)
+                    with torch.no_grad():
+                        alpha = v / (1 - iou_for_ciou + v + 1e-7)
+                    iou_loss = diou_loss + alpha * v  # size(n_responsible,)
                 loss_box += iou_loss.mean()
 
                 # Objectness - assign objectness target to responsible pred
@@ -681,7 +690,8 @@ class Yolov3(nn.Module):
                 score[thresh_idx_pred, thresh_idx_class].unsqueeze(-1),  # size(n_thresh_pred, 1), score
             ), dim=-1).to(torch.float32)  # size(n_thresh_pred, 8), x1,y1,x2,y2,conf,prob_class,idx_class,score
             # Sort by score and remove excess predictions to prevent OOM & long computation time
-            pred_per_img = pred_per_img[pred_per_img[:, 7].argsort(descending=True)[:self.config.max_n_pred_per_img]]
+            if pred_per_img.shape[0] > self.config.max_n_pred_per_img:
+                pred_per_img = pred_per_img[pred_per_img[:, 7].argsort(descending=True)[:self.config.max_n_pred_per_img]]
             # Clip boxes to non-pad image border
             if border is not None:
                 border_per_img = border[idx_img]  # size(4,), x1,y1,x2,y2 normalized by img w,h

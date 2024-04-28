@@ -165,7 +165,7 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 
 # Dataloader
-data_dir = os.path.join('data', dataset_name.strip('nano_').strip('blank_'))
+data_dir = os.path.join('data', dataset_name.replace('nano_', '').replace('blank_', ''))
 if dataset_name == 'voc' or dataset_name == 'nano_voc':
     from dataloaders.voc import VocConfig, voc_collate_fn, VocTrainDataLoader, VocValDataLoader
     dataloader_args = dict(
@@ -194,10 +194,55 @@ elif dataset_name == 'blank_voc' or dataset_name == 'nano_blank_voc':
     dataloader_config = BlankVocConfig(**dataloader_args)
     dataloaders = {
         'train': BlankVocTrainDataLoader(dataloader_config, data_dir, batch_size=batch_size, num_workers=n_worker,
-                                           collate_fn=voc_collate_fn, nano=dataset_name.startswith('nano_')),
+                                         collate_fn=voc_collate_fn, nano=dataset_name.startswith('nano_')),
         'val': BlankVocValDataLoader(dataloader_config, data_dir, batch_size=batch_size, num_workers=n_worker,
                                      collate_fn=voc_collate_fn, shuffle=True,  # shuffle=True since only eval partial data
                                      nano=dataset_name.startswith('nano_'))
+    }
+elif dataset_name == 'coco' or dataset_name == 'nano_coco':
+    from dataloaders.coco import CocoConfig, coco_collate_fn, CocoTrainDataLoader, CocoValDataLoader
+    dataloader_args = dict(
+        img_h=img_h, img_w=img_w, aug_type=aug_type, letterbox=letterbox, fill=fill,
+        color_p=color_p, brightness=brightness, contrast=contrast, saturation=saturation, hue=hue,
+        blur_p=blur_p, blur_size_min=blur_size_min, blur_size_max=blur_size_max,
+        blur_sigma_min=blur_sigma_min, blur_sigma_max=blur_sigma_max, autocontrast_p=autocontrast_p,
+        posterize_p=posterize_p, posterize_bits=posterize_bits, grayscale_p=grayscale_p,
+        channelshuffle_p=channelshuffle_p, perspective_p=perspective_p, perspective=perspective,
+        translate=translate, scale=scale, shear_p=shear_p, shear=shear, rotate_p=rotate_p, degrees=degrees,
+        crop_scale=crop_scale, ratio_min=ratio_min, ratio_max=ratio_max, flip_p=flip_p, min_size=min_size,
+        imgs_mean=imgs_mean, imgs_std=imgs_std,
+    )
+    dataloader_config = CocoConfig(**dataloader_args)
+    dataloaders = {
+        'train': CocoTrainDataLoader(dataloader_config,
+                                     os.path.join(data_dir, 'images', 'train2017'),
+                                     os.path.join(data_dir, 'annotations', 'instances_train2017.json'),
+                                     batch_size=batch_size, num_workers=n_worker,
+                                     collate_fn=coco_collate_fn, nano=dataset_name.startswith('nano_')),
+        'val': CocoValDataLoader(dataloader_config,
+                                 os.path.join(data_dir, 'images', 'val2017'),
+                                 os.path.join(data_dir, 'annotations', 'instances_val2017.json'),
+                                 batch_size=batch_size, num_workers=n_worker,
+                                 collate_fn=coco_collate_fn, shuffle=True,  # shuffle=True since only eval partial data
+                                 nano=dataset_name.startswith('nano_'))
+    }
+elif dataset_name == 'blank_coco' or dataset_name == 'nano_blank_coco':
+    from dataloaders.coco import BlankCocoConfig, coco_collate_fn, BlankCocoTrainDataLoader, BlankCocoValDataLoader
+    dataloader_args = dict(img_h=img_h, img_w=img_w, letterbox=letterbox, fill=fill, min_size=min_size,
+                           imgs_mean=imgs_mean, imgs_std=imgs_std)
+    dataloader_config = BlankCocoConfig(**dataloader_args)
+    dataloaders = {
+        'train': BlankCocoTrainDataLoader(dataloader_config,
+                                         os.path.join(data_dir, 'images', 'train2017'),
+                                         os.path.join(data_dir, 'annotations', 'instances_train2017.json'),
+                                         batch_size=batch_size, num_workers=n_worker, collate_fn=coco_collate_fn,
+                                         nano=dataset_name.startswith('nano_')),
+        'val': BlankCocoValDataLoader(dataloader_config,
+                                      os.path.join(data_dir, 'images', 'val2017'),
+                                      os.path.join(data_dir, 'annotations', 'instances_val2017.json'),
+                                      batch_size=batch_size, num_workers=n_worker, collate_fn=coco_collate_fn,
+                                      shuffle=True,  # shuffle=True since only eval partial data
+                                      nano=dataset_name.startswith('nano_'))
     }
 else:
     raise ValueError(f"dataset_name: {dataset_name} not supported")
