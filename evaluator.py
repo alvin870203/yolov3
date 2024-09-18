@@ -100,10 +100,10 @@ class DetEvaluator():
                 tp_cum = tp[idx].cumsum(0)
                 # Recall
                 recall = tp_cum / (n_gt + self.eps)  # 0~max_r, @0.5:0.95
-                r_curve[idx_cls] = np.interp(-x_curve, -score[idx], recall[:, 0], left=0)  # negative x, xp because xp decreases. X: 0~-1, Y: max_r~0
+                r_curve[idx_cls] = np.interp(-x_curve, -score[idx], recall[:, 0], left=0)  # negative x, xp because xp decreases. X: -1~0, Y: 0~max_r
                 # Precision
                 precision = tp_cum / (tp_cum + fp_cum)  # 1~min_p, @0.5:0.95
-                p_curve[idx_cls] = np.interp(-x_curve, -score[idx], precision[:, 0], left=1)  # X: 0~-1, Y: min_p~1
+                p_curve[idx_cls] = np.interp(-x_curve, -score[idx], precision[:, 0], left=1)  # X: -1~0, Y: 1~min_p
                 # AP from recall-precision curve
                 for idx_thresh in range(self.n_iou):  # every iou threshold
                     # Append sentinel values to beginning and end
@@ -117,12 +117,12 @@ class DetEvaluator():
                     if idx_thresh == 0:
                         pr_curve[idx_cls] = np.interp(x_curve, mrec, mpre)  # X: 0~1, Y: 1~0
             # Compute F1 score (harmonic mean of precision and recall)
-            f1_curve = 2 * p_curve * r_curve / (p_curve + r_curve + self.eps)  # @0.5, X: 0~-1, Y: right_f1~left_f1, shape(n_unique_classes, 1000)
+            f1_curve = 2 * p_curve * r_curve / (p_curve + r_curve + self.eps)  # @0.5, X: -1~0, Y: right_f1~left_f1, shape(n_unique_classes, 1000)
             curves = [
                 [x_curve, pr_curve, 'Recall', 'Precision'],
-                [x_curve, f1_curve, 'Score', 'F1'],
-                [x_curve, p_curve, 'Score', 'Precision'],
-                [x_curve, r_curve, 'Score', 'Recall'],
+                [x_curve, f1_curve, 'Score', 'F1'],  # X: 1~0, Y: right_f1~left_f1
+                [x_curve, p_curve, 'Score', 'Precision'],  # X: 1~0, Y: 1~min_p
+                [x_curve, r_curve, 'Score', 'Recall'],  # X: 1~0, Y: 0~max_r
             ]
             # Box filter of fraction smooth_f.
             f1_curve_mean = f1_curve.mean(0)  # mean over all classes, shape(1000,)
